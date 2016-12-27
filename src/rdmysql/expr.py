@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-        
-        
+
 class Expr(object):
     """ 表达式 """
     _field = ''

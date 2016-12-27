@@ -1,4 +1,7 @@
-from rdmysql import Database, Table, Expr, Row
+# -*- coding: utf-8 -*-
+
+from datetime import datetime
+from rdmysql import Database, Table, Row, Expr, And, Or
 import settings
 
 Database.configures.update(settings.MYSQL_CONFS)
@@ -6,14 +9,51 @@ Database.configures.update(settings.MYSQL_CONFS)
 
 class UserProfile(Table):
     __dbkey__ = 'user'
-    __tablename__ = 'user_profiles'
+    __tablename__ = 't_user_profiles'
+    
+    
+def test_query_all():
+    where = Or(Expr('id') < 100, Expr('id') == 100) #Expr('id') <= 100
+    query = UserProfile().filter(where)
+    profs = query.order_by('id', 'DESC').all('*', 3)
+    if profs is not None:
+        assert len(profs) <= 3
+    print query.db.sqls[-1]
+    return profs or []
+    
+    
+def test_query_one(username):
+    query = UserProfile().filter(Expr('username') == username)
+    ryan = query.one('*', Row)
+    if ryan is not None:
+        assert ryan.username == username
+        print ryan.to_dict()
+    print query.db.sqls[-1]
+    return ryan
+    
+    
+def test_query_save(obj, **kwargs):
+    assert isinstance(obj, Row)
+    for key, value in kwargs.items():
+        obj.change(key, value)
+    obj.set_pkey('id')
+    query = UserProfile()
+    query.save(obj)
+    print query.db.sqls[-1]
+    
+    obj.change('id', None)
+    obj.change('username', 'ryan2')
+    query.save(obj)
+    print query.db.sqls[-1]
+    return obj
     
     
 if __name__ == '__main__':
-    uname = 'ryan'
-    query = UserProfile()
-    query.filter(Expr('username') == uname)
-    ryan = query.one('*', Row)
-    assert ryan.username == uname
-    print ryan.to_dict()
-    print query.db.sqls[-1]
+    test_query_all()
+    ryan = test_query_one(username = 'ryan')
+    if ryan:
+        now = datetime.now()
+        today = now.strftime('%Y%m%d')
+        changed_at = now.strftime('%Y-%m-%d %H:%M:%S')
+        nickname = 'Ryan-%s' % today
+        test_query_save(ryan, nickname = nickname, changed_at = changed_at)

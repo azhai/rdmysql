@@ -6,23 +6,34 @@ from decimal import Decimal
 
 class Row(object):
     """ 单行结果 """
+    _pkeys = ['id', ]
     _fields = []
     _data = {}
         
-    def __init__(self, data):
-        self.set_data(data)
+    def __init__(self, data = {}):
+        self.merge(data)
         
     def __getattr__(self, field):
         if field in self._data:
             return self._data[field]
     
+    def set_pkey(self, *args):
+        self._pkeys = args
+        return self
+    
     def set_fields(self, fields):
         self._fields = list(fields)
+        return self
+        
+    def change(self, field, value):
+        self._data[field] = value
+        return self
     
-    def set_data(self, data):
+    def merge(self, data):
         if self._fields and isinstance(data, (list, tuple)):
             data = dict(zip(self._fields, list(data)))
-        self._data = data
+        self._data.update(data)
+        return self
             
     def to_dict(self):
         data = {}

@@ -4,21 +4,33 @@
 
     pip install rdmysql
 
+It required umysql. If you use pypy, read https://github.com/esnme/ultramysql/pull/58
+
 ## Usage:
 
 ``` python
 # For memcache
-from rdmysql import Database, Table, Expr, Row
+from datetime import datetime
+from rdmysql import Database, Table, Row, Expr, And, Or
 import settings
 
 Database.configures.update(settings.MYSQL_CONFS)
 
 class UserProfile(Table):
     __dbkey__ = 'user'
-    __tablename__ = 'user_profiles'
+    __tablename__ = 't_user_profiles'
 
-ryan = UserProfile().filter_by(username = 'ryan').one()
-print ryan.to_dict()
+query = UserProfile().filter_by(username = 'ryan')
+ryan = query.one()
+if ryan:
+    print ryan.to_dict()
+    now = datetime.now()
+    today = now.strftime('%Y%m%d')
+    changed_at = now.strftime('%Y-%m-%d %H:%M:%S')
+    ryan.change('nickname', 'Ryan-%s' % today)
+    ryan.change('changed_at', changed_at)
+    query.save(ryan, 'id')
+    print query.db.sqls
 ```
 
 ## Methods of Table
@@ -28,10 +40,10 @@ There are some methods for class named 'Table':
     insert      param data : dict
     
     update      param changes : dict
-                param where   : dict (optional)
+                param where   : dict (optional default={})
     
-    replace     param changes : dict
-                param where   : dict (optional)
+    save        param changes : dict / object
+                param pkey    : str (optional default='')
     
     filter      param expr : Expr / str
                 param *args
@@ -39,16 +51,16 @@ There are some methods for class named 'Table':
     filter_by   param **where
     
     order_by    param field     : str
-                param direction : 'ASC' / 'DESC'
+                param direction : 'ASC' / 'DESC' (optional default='ASC')
     
     group_by    param field : str
     
-    all         param coulmns : str default='*'
-                param limit   : int default=0
-                param offset  : int default=0
+    all         param coulmns : str (optional default='*')
+                param limit   : int (optional default=0)
+                param offset  : int (optional default=0)
     
-    one         param coulmns : str default='*'
-                param klass   : class default=Row
+    one         param coulmns : str   (optional default='*')
+                param klass   : class (optional default=Row)
     
     apply       param name : str
                 param *args

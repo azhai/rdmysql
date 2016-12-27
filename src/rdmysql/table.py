@@ -72,7 +72,8 @@ class Database(object):
     def add_sql(self, sql, params):
         if len(self.sqls) > 50:
             del self.sqls[:-49]
-        full_sql = sql % tuple([u"'%s'" % p for p in params])
+        to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
+        full_sql = sql % tuple([to_str(p) for p in params])
         self.sqls.append(full_sql)
         return full_sql
         
@@ -86,7 +87,8 @@ class Database(object):
                 rs = self.reconnect(True).query(sql, params)
             else:
                 raise err
-        self.add_sql(sql, params)
+        finally:
+            self.add_sql(sql, params)
         if isinstance(rs, umysql.ResultSet):
             fs = [f[0] for f in rs.fields]
             return [dict(zip(fs, r)) for r in rs.rows]
@@ -154,7 +156,7 @@ class Table(object):
             group_order += item
         return group_order
         
-    def insert(self, data):
+    def insert(self, data, action = 'INSERT INTO'):
         if isinstance(data, dict):
             keys = data.keys()
             fields = "(`%s`)" % "`,`".join(keys)
@@ -163,7 +165,8 @@ class Table(object):
             assert isinstance(data, (list, tuple))
             fields, params = "", list(data)
         holders = ",".join(["%s"] * len(params))
-        sql = "INSERT INTO %s%s VALUES(%s)" % (self.get_tablename(), fields, holders)
+        sql = "%s %s%s VALUES(%s)" % (action,
+                self.get_tablename(), fields, holders)
         return self.db.query(sql, *params)
         
     def update(self, changes, where = {}):
@@ -171,8 +174,8 @@ class Table(object):
             self.filter_by(**where)
         assert changes and isinstance(changes, dict)
         sets, params = [], []
-        for data, value in changes.items():
-            sets.append("`%s`=%%s" % data)
+        for key, value in changes.items():
+            sets.append("`%s`=%%s" % key)
             params.append(value)
         sql = "UPDATE `%s` SET %s" % (self.get_tablename(), ",".join(sets))
         where, wh_params = self.build_where()
@@ -181,15 +184,22 @@ class Table(object):
         params.extend(wh_params)
         return self.db.query(sql, *params)
         
-    def replace(self, changes, where = {}):
-        if where:
-            self.filter_by(**where)
-        row = self.one('*', dict)
-        if row:
-            return self.update(changes)
+    def save(self, row, pkey = ''):
+        if isinstance(row, dict):
+            changes = row
+            pkeys = [pkey, ] if pkey else []
         else:
-            changes.update(where)
-            return self.insert(changes)
+            changes = row.to_dict()
+            pkeys = [pkey, ] if pkey else row._pkeys
+        where = {}
+        for key in pkeys:
+            value = changes.pop(key, None)
+            if value is not None:
+                where[key] = value
+        if len(where) > 0:
+            return self.update(changes, where)
+        else:
+            return self.insert(changes, 'REPLACE INTO')
         
     def all(self, coulmns = '*', limit = 0, offset = 0):
         if isinstance(coulmns, (list,tuple,set)):
@@ -211,6 +221,8 @@ class Table(object):
         rows = self.all(coulmns, 1)
         if rows and len(rows) > 0:
             return klass(rows[0])
+        elif klass is dict:
+            return {}
             
     def apply(self, name, *args, **kwargs):
         name = name.strip().upper()
