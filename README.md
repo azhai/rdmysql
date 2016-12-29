@@ -9,7 +9,6 @@ It required umysql. If you use pypy, read https://github.com/esnme/ultramysql/pu
 ## Usage:
 
 ``` python
-# For memcache
 from datetime import datetime
 from rdmysql import Database, Table, Row, Expr, And, Or
 import settings
@@ -19,6 +18,7 @@ Database.configures.update(settings.MYSQL_CONFS)
 class UserProfile(Table):
     __dbkey__ = 'user'
     __tablename__ = 't_user_profiles'
+    __indexes__ = ['username']
 
 query = UserProfile().filter_by(username = 'ryan')
 ryan = query.one()
@@ -29,7 +29,7 @@ if ryan:
     changed_at = now.strftime('%Y-%m-%d %H:%M:%S')
     ryan.change('nickname', 'Ryan-%s' % today)
     ryan.change('changed_at', changed_at)
-    query.save(ryan, 'id')
+    query.save(ryan)
     print query.db.sqls
 ```
 
@@ -43,7 +43,7 @@ There are some methods for class named 'Table':
                 param where   : dict (optional default={})
     
     save        param changes : dict / object
-                param pkey    : str (optional default='')
+                param indexes : list (optional default=[])
     
     filter      param expr : Expr / str
                 param *args

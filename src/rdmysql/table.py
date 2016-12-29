@@ -100,6 +100,7 @@ class Table(object):
     """ 数据表 """
     __dbkey__ = 'default'
     __tablename__ = ''
+    __indexes__ = ['id']
     
     def __init__(self, tablename = ''):
         if tablename:
@@ -184,18 +185,18 @@ class Table(object):
         params.extend(wh_params)
         return self.db.query(sql, *params)
         
-    def save(self, row, pkey = ''):
-        if isinstance(row, dict):
-            changes = row
-            pkeys = [pkey, ] if pkey else []
-        else:
+    def save(self, row, indexes = []):
+        if len(indexes) == 0:
+            indexes = self.__indexes__
+        if hasattr(row, 'to_dict'):
             changes = row.to_dict()
-            pkeys = [pkey, ] if pkey else row._pkeys
+        else:
+            changes = dict(row)
         where = {}
-        for key in pkeys:
-            value = changes.pop(key, None)
+        for index in indexes:
+            value = changes.pop(index, None)
             if value is not None:
-                where[key] = value
+                where[index] = value
         if len(where) > 0:
             return self.update(changes, where)
         else:

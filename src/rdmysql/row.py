@@ -6,7 +6,6 @@ from decimal import Decimal
 
 class Row(object):
     """ 单行结果 """
-    _pkeys = ['id', ]
     _fields = []
     _data = {}
         
@@ -16,10 +15,6 @@ class Row(object):
     def __getattr__(self, field):
         if field in self._data:
             return self._data[field]
-    
-    def set_pkey(self, *args):
-        self._pkeys = args
-        return self
     
     def set_fields(self, fields):
         self._fields = list(fields)
