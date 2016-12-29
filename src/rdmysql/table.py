@@ -17,6 +17,11 @@ class Database(object):
         self.conn = None
         self.sqls = []
         
+    @staticmethod
+    def set_charset(conn, charset = 'utf8'):
+        sql = "SET NAMES '%s'" % charset
+        return conn.query(sql)
+        
     @classmethod
     def add_configure(cls, name, **configure):
         cls.configures[name] = configure
@@ -26,7 +31,7 @@ class Database(object):
             self.conn.close()
         self.__class__.connections.pop(self.current)
         
-    def reconnect(self, force = False):
+    def reconnect(self, force = False, **env):
         if not self.conn: #重用连接
             self.conn = self.__class__.connections.get(self.current)
         if force and self.conn: #强制重连
@@ -45,7 +50,7 @@ class Database(object):
         password = conf.get('password', '')
         dbname = conf.get('database', '')
         conn.connect(host, port, username, password, dbname)
-        self.set_charset(conf.get('charset', 'utf8'), conn)
+        self.set_charset(conn, conf.get('charset', 'utf8'))
         return conn
 
     def is_connection_lost(self, err):
@@ -63,13 +68,7 @@ class Database(object):
             """
         return False
         
-    def set_charset(self, charset, conn = None):
-        sql = "SET NAMES '%s'" % charset
-        if not conn:
-            conn = self.reconnect()
-        return conn.query(sql)
-        
-    def add_sql(self, sql, params):
+    def add_sql(self, sql, *params):
         if len(self.sqls) > 50:
             del self.sqls[:-49]
         to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
@@ -77,9 +76,7 @@ class Database(object):
         self.sqls.append(full_sql)
         return full_sql
         
-    def query(self, sql, *params, **env):
-        if env.has_key('charset'): #使用字符集
-            self.set_charset(env.get('charset', 'utf8'))
+    def execute(self, sql, *params):
         try:
             rs = self.reconnect().query(sql, params)
         except umysql.Error as err:
@@ -88,7 +85,11 @@ class Database(object):
             else:
                 raise err
         finally:
-            self.add_sql(sql, params)
+            return rs
+        
+    def query(self, sql, *params):
+        rs = self.execute(sql, *params)
+        self.add_sql(sql, *params)
         if isinstance(rs, umysql.ResultSet):
             fs = [f[0] for f in rs.fields]
             return [dict(zip(fs, r)) for r in rs.rows]
@@ -168,7 +169,9 @@ class Table(object):
         holders = ",".join(["%s"] * len(params))
         sql = "%s %s%s VALUES(%s)" % (action,
                 self.get_tablename(), fields, holders)
-        return self.db.query(sql, *params)
+        rs = self.db.execute(sql, *params)
+        self.db.add_sql(sql, *params)
+        return rs[1] if rs else 0 #最后的自增ID
         
     def update(self, changes, where = {}):
         if where:
@@ -183,7 +186,9 @@ class Table(object):
         if where:
             sql += " WHERE " + where
         params.extend(wh_params)
-        return self.db.query(sql, *params)
+        rs = self.db.execute(sql, *params)
+        self.db.add_sql(sql, *params)
+        return rs[0] if rs else -1 #影响的行数
         
     def save(self, row, indexes = []):
         if len(indexes) == 0:
@@ -202,20 +207,25 @@ class Table(object):
         else:
             return self.insert(changes, 'REPLACE INTO')
         
-    def all(self, coulmns = '*', limit = 0, offset = 0):
+    def prepare(self, coulmns = '*', addition = ''):
         if isinstance(coulmns, (list,tuple,set)):
             coulmns = ",".join(coulmns)
         sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
-        where, wh_params = self.build_where()
+        where, params = self.build_where()
         if where:
             sql += " WHERE " + where
-        sql += self.build_group_order()
+        if addition:
+            sql += " " + addition.strip()
+        return sql, params
+        
+    def all(self, coulmns = '*', limit = 0, offset = 0):
+        addition = self.build_group_order()
         if limit > 0:
             if offset > 0:
-                sql += " LIMIT %d, %d" % (offset, limit)
+                addition += " LIMIT %d, %d" % (offset, limit)
             else:
-                sql += " LIMIT %d" % limit
-        params = wh_params
+                addition += " LIMIT %d" % limit
+        sql, params = self.prepare(coulmns, addition)
         return self.db.query(sql, *params)
         
     def one(self, coulmns = '*', klass = Row):
