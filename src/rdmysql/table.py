@@ -1,102 +1,10 @@
 # -*- coding: utf-8 -*-
 
-import umysql
 from datetime import date, timedelta
+from .database import Database
 from .expr import Expr, And, Or
-from .row import Row
 
 
-class Database(object):
-    """ MySQL数据库 """
-    
-    configures = {}
-    connections = {}
-    
-    def __init__(self, current = 'default'):
-        self.current = current
-        self.conn = None
-        self.sqls = []
-        
-    @staticmethod
-    def set_charset(conn, charset = 'utf8'):
-        sql = "SET NAMES '%s'" % charset
-        return conn.query(sql)
-        
-    @classmethod
-    def add_configure(cls, name, **configure):
-        cls.configures[name] = configure
-        
-    def close(self):
-        if isinstance(self.conn, umysql.Connection):
-            self.conn.close()
-        self.__class__.connections.pop(self.current)
-        
-    def reconnect(self, force = False, **env):
-        if not self.conn: #重用连接
-            self.conn = self.__class__.connections.get(self.current)
-        if force and self.conn: #强制重连
-            self.conn.close()
-        if force or not self.conn or not self.conn.is_connected(): #需要时连接
-            self.conn = self.connect(self.current)
-            self.__class__.connections[self.current] = self.conn
-        return self.conn
-        
-    def connect(self, current):
-        conf = self.__class__.configures.get(current, {})
-        conn = umysql.Connection()
-        host = conf.get('host', '127.0.0.1')
-        port = int(conf.get('port', 3306))
-        username = conf.get('username', 'root')
-        password = conf.get('password', '')
-        dbname = conf.get('database', '')
-        conn.connect(host, port, username, password, dbname)
-        self.set_charset(conn, conf.get('charset', 'utf8'))
-        return conn
-
-    def is_connection_lost(self, err):
-        if isinstance(err, umysql.Error):
-            errmsg = err.message
-            if errmsg.startswith('Connection reset by peer'):
-                return True
-            elif errmsg.startswith('Not connected'):
-                return True
-            """
-            elif errmsg.startswith('Too many connections'):
-                return True
-            elif errmsg.startswith('Access denied for user'):
-                return True
-            """
-        return False
-        
-    def add_sql(self, sql, *params):
-        if len(self.sqls) > 50:
-            del self.sqls[:-49]
-        to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
-        full_sql = sql % tuple([to_str(p) for p in params])
-        self.sqls.append(full_sql)
-        return full_sql
-        
-    def execute(self, sql, *params):
-        try:
-            rs = self.reconnect().query(sql, params)
-        except umysql.Error as err:
-            if self.is_connection_lost(err):
-                rs = self.reconnect(True).query(sql, params)
-            else:
-                raise err
-        finally:
-            return rs
-        
-    def query(self, sql, *params):
-        rs = self.execute(sql, *params)
-        self.add_sql(sql, *params)
-        if isinstance(rs, umysql.ResultSet):
-            fs = [f[0] for f in rs.fields]
-            return [dict(zip(fs, r)) for r in rs.rows]
-        elif isinstance(rs, tuple):
-            return rs[0] #影响行数
-        
-        
 class Table(object):
     """ 数据表 """
     __dbkey__ = 'default'
@@ -106,8 +14,7 @@ class Table(object):
     def __init__(self, tablename = ''):
         if tablename:
             self.__tablename__ = tablename
-        self.condition = And()
-        self.additions = {}
+        self.reset()
     
     @property
     def db(self):
@@ -123,6 +30,11 @@ class Table(object):
         
     def get_tablename(self):
         return self.__tablename__
+    
+    def reset(self, or_cond = False):
+        self.condition = Or() if or_cond else And()
+        self.additions = {}
+        return self
     
     def filter(self, expr, *args):
         if isinstance(expr, str):
@@ -158,36 +70,60 @@ class Table(object):
             group_order += item
         return group_order
         
-    def insert(self, data, action = 'INSERT INTO'):
-        if isinstance(data, dict):
-            keys = data.keys()
+    @staticmethod
+    def unzip_pair(row, keys = []):
+        if isinstance(row, dict):
+            keys = row.keys()
+        if len(keys) > 0:
             fields = "(`%s`)" % "`,`".join(keys)
-            params = [data[key] for key in keys]
+            values = [row[key] for key in keys]
         else:
-            assert isinstance(data, (list, tuple))
-            fields, params = "", list(data)
+            fields = ''
+            values = list(row)
+        return keys, values, fields
+        
+    def insert(self, *rows, **kwargs):
+        action = kwargs.get('action', 'INSERT INTO')
+        if len(rows) == 0:
+            return 0
+        elif len(rows) > 10:
+            action = action.replace('INTO', 'DELAYED')
+        rows = list(rows)
+        row = rows.pop(0)
+        keys, params, fields = self.unzip_pair(row)
         holders = ",".join(["%s"] * len(params))
         sql = "%s %s%s VALUES(%s)" % (action,
                 self.get_tablename(), fields, holders)
+        if len(rows) > 0: #插入更多行
+            sql += (", (%s)" % holders) * len(rows)
+            for row in rows:
+                keys, values, _fields = self.unzip_pair(row, keys)
+                params.extend(values)
         rs = self.db.execute(sql, *params)
-        self.db.add_sql(sql, *params)
         return rs[1] if rs else 0 #最后的自增ID
         
-    def update(self, changes, where = {}):
+    def delete(self, where):
+        sql = "DELETE FROM `%s`" % self.get_tablename()
         if where:
             self.filter_by(**where)
-        assert changes and isinstance(changes, dict)
-        sets, params = [], []
-        for key, value in changes.items():
-            sets.append("`%s`=%%s" % key)
-            params.append(value)
-        sql = "UPDATE `%s` SET %s" % (self.get_tablename(), ",".join(sets))
-        where, wh_params = self.build_where()
+        where, params = self.build_where()
         if where:
             sql += " WHERE " + where
-        params.extend(wh_params)
         rs = self.db.execute(sql, *params)
-        self.db.add_sql(sql, *params)
+        return rs[0] if rs else -1 #影响的行数
+        
+    def update(self, changes, where = {}):
+        assert isinstance(changes, dict)
+        keys, values, _fields = self.unzip_pair(changes)
+        fields = ",".join(["`%s`=%%s" % key for key in keys])
+        sql = "UPDATE `%s` SET %s" % (self.get_tablename(), fields)
+        if where:
+            self.filter_by(**where)
+        where, params = self.build_where()
+        if where:
+            sql += " WHERE " + where
+        params = values + params
+        rs = self.db.execute(sql, *params)
         return rs[0] if rs else -1 #影响的行数
         
     def save(self, row, indexes = []):
@@ -205,7 +141,7 @@ class Table(object):
         if len(where) > 0:
             return self.update(changes, where)
         else:
-            return self.insert(changes, 'REPLACE INTO')
+            return self.insert(changes, action = 'REPLACE INTO')
         
     def prepare(self, coulmns = '*', addition = ''):
         if isinstance(coulmns, (list,tuple,set)):
@@ -218,7 +154,7 @@ class Table(object):
             sql += " " + addition.strip()
         return sql, params
         
-    def all(self, coulmns = '*', limit = 0, offset = 0):
+    def all(self, coulmns = '*', limit = 0, offset = 0, model = dict):
         addition = self.build_group_order()
         if limit > 0:
             if offset > 0:
@@ -226,13 +162,14 @@ class Table(object):
             else:
                 addition += " LIMIT %d" % limit
         sql, params = self.prepare(coulmns, addition)
-        return self.db.query(sql, *params)
+        rs = self.db.execute(sql, *params)
+        return [row for row in self.db.fetch(rs, model = model)]
         
-    def one(self, coulmns = '*', klass = Row):
-        rows = self.all(coulmns, 1)
+    def one(self, coulmns = '*', model = dict):
+        rows = self.all(coulmns, limit = 1, model = model)
         if rows and len(rows) > 0:
-            return klass(rows[0])
-        elif klass is dict:
+            return rows[0]
+        elif model is dict:
             return {}
             
     def apply(self, name, *args, **kwargs):
@@ -273,17 +210,38 @@ class Table(object):
 
 class Monthly(Table):
     calender = date.today()
+    curr_has_subffix = True
     
     def set_date(self, curr_date):
         self.calender = curr_date
         return self
     
-    def prevous(self, monthes = 1):
+    def backward(self, monthes = 1):
         for i in range(monthes): #小等于0时为空list
             self.calender = self.calender.replace(day = 1)
             self.calender -= timedelta(1)
         return self
+    
+    def forward(self, monthes = 1):
+        for i in range(monthes): #小等于0时为空list
+            self.calender = self.calender.replace(day = 28)
+            self.calender += timedelta(4)
+        return self
+        
+    def get_month_diff(self, calender = None):
+        calc_month_nth = lambda dt: (dt.year - 2000) * 12 + dt.month
+        if calender:
+            month_nth = calc_month_nth(calender)
+        else: #缓存当前月的数值
+            if not hasattr(self, '_curr_month_nth'):
+                self._curr_month_nth = calc_month_nth(date.today())
+            month_nth = self._curr_month_nth
+        return month_nth - calc_month_nth(self.calender)
         
     def get_tablename(self):
-        ym = self.calender.strftime('%Y%m')
-        return '%s_%s' % (self.__tablename__, ym)
+        if not self.curr_has_subffix \
+                and self.get_month_diff() == 0:
+            return self.__tablename__
+        else:
+            suffix = self.calender.strftime('%Y%m')
+            return '%s_%s' % (self.__tablename__, suffix)

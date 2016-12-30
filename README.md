@@ -21,7 +21,7 @@ class UserProfile(Table):
     __indexes__ = ['username']
 
 query = UserProfile().filter_by(username = 'ryan')
-ryan = query.one()
+ryan = query.one(model = Row)
 if ryan:
     print ryan.to_dict()
     now = datetime.now()
@@ -37,7 +37,10 @@ if ryan:
 
 There are some methods for class named 'Table':
     
-    insert      param data : dict
+    insert      param *rows
+                param **kwargs
+    
+    delete      param where   : dict
     
     update      param changes : dict
                 param where   : dict (optional default={})
@@ -60,7 +63,7 @@ There are some methods for class named 'Table':
                 param offset  : int (optional default=0)
     
     one         param coulmns : str   (optional default='*')
-                param klass   : class (optional default=Row)
+                param model   : class (optional default=dict)
     
     apply       param name : str
                 param *args
@@ -73,6 +76,10 @@ There are some methods for class named 'Table':
 
 Monthly is a subclass of Table, There are other two methods for Monthly:
     
-    prevous    param monthes : int default=1
+    backward   param monthes : int (optional default=1)
+    
+    forward    param monthes : int (optional default=1)
     
     set_date   param curr_date : date
+    
+    get_month_diff   param calender : date (optional defaut=today())
