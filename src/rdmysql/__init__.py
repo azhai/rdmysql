@@ -3,6 +3,7 @@
 __version__ = "0.0.6"
 
 from .database import Database
-from .table import Table, Monthly
+from .table import Table
+from .daily import Daily, Weekly, Monthly
 from .expr import Expr, And, Or
 from .row import Row

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from datetime import date, timedelta
 from .database import Database
 from .expr import Expr, And, Or
 
@@ -206,46 +205,3 @@ class Table(object):
         
     def avg(self, *args, **kwargs):
         return self.apply('avg', *args, **kwargs)
-
-
-class Monthly(Table):
-    calender = date.today()
-    curr_has_subffix = True
-    
-    def _add_month(self, num = 0):
-        return self.calender
-    
-    def set_date(self, curr_date):
-        self.calender = curr_date
-        return self
-    
-    def forward(self, monthes = 1):
-        total = self.calender.month + monthes - 1
-        ymd = dict(
-            year = self.calender.year + total / 12,
-            month = total % 12 + 1,
-            day = 1,
-        )
-        self.calender = self.calender.replace(**ymd)
-        return self
-    
-    def backward(self, monthes = 1):
-        return self.forward(0 - monthes)
-        
-    def get_month_diff(self, calender = None):
-        calc_month_nth = lambda dt: (dt.year - 2000) * 12 + dt.month
-        if calender:
-            month_nth = calc_month_nth(calender)
-        else: #缓存当前月的数值
-            if not hasattr(self, '_curr_month_nth'):
-                self._curr_month_nth = calc_month_nth(date.today())
-            month_nth = self._curr_month_nth
-        return calc_month_nth(self.calender) - month_nth
-        
-    def get_tablename(self):
-        if not self.curr_has_subffix \
-                and self.get_month_diff() == 0:
-            return self.__tablename__
-        else:
-            suffix = self.calender.strftime('%Y%m')
-            return '%s_%s' % (self.__tablename__, suffix)
