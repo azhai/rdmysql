@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import umysql
+from .expr import And
 
 
 class Database(object):
@@ -65,14 +66,6 @@ class Database(object):
             """
         return False
         
-    def add_sql(self, sql, *params):
-        if len(self.sqls) > 50:
-            del self.sqls[:-49]
-        to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
-        full_sql = sql % tuple([to_str(p) for p in params])
-        self.sqls.append(full_sql)
-        return full_sql
-        
     def execute(self, sql, *params):
         try:
             rs = self.reconnect().query(sql, params)
@@ -96,3 +89,39 @@ class Database(object):
                     yield row
                 else:
                     yield model(row)
+        
+    def add_sql(self, sql, *params):
+        if len(self.sqls) > 50:
+            del self.sqls[:-49]
+        to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
+        full_sql = sql % tuple([to_str(p) for p in params])
+        self.sqls.append(full_sql)
+        return full_sql
+        
+    def read_sql(self, sql, condition, addition = ''):
+        assert isinstance(condition, And)
+        where, params = condition.build()
+        if where:
+            sql += " WHERE " + where
+        if addition:
+            sql += " " + addition.strip()
+        return self.execute(sql, *params)
+        
+    def write_sql(self, sql, condition, *values):
+        assert isinstance(condition, And)
+        where, params = condition.build()
+        if where:
+            sql += " WHERE " + where
+        if len(values) > 0:
+            params = list(values) + params
+        return self.execute(sql, *params)
+    
+    def find_tables(self, name, is_wild = False):
+        wildcard = '%' if is_wild else ''
+        sql = "SHOW TABLES LIKE `%s`" % (name + wildcard)
+        rs = self.execute(sql)
+        return [row[0] for row in rs.rows]
+    
+    def is_exists(self, name):
+        tables = self.find_tables(name)
+        return len(tables) > 0

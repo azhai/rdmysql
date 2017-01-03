@@ -42,12 +42,8 @@ class Table(object):
         return self
         
     def filter_by(self, **where):
-        for field, value in where.items():
-            self.condition.append(Expr(field) == value)
+        self.condition.extend(**where)
         return self
-    
-    def build_where(self):
-        return self.condition.build()
         
     def order_by(self, field, direction = 'ASC'):
         if 'ORDER BY' not in self.additions:
@@ -70,7 +66,7 @@ class Table(object):
         return group_order
         
     @staticmethod
-    def unzip_pair(row, keys = []):
+    def unzip_pairs(row, keys = []):
         if isinstance(row, dict):
             keys = row.keys()
         if len(keys) > 0:
@@ -89,40 +85,35 @@ class Table(object):
             action = action.replace('INTO', 'DELAYED')
         rows = list(rows)
         row = rows.pop(0)
-        keys, params, fields = self.unzip_pair(row)
+        keys, params, fields = self.unzip_pairs(row)
         holders = ",".join(["%s"] * len(params))
         sql = "%s %s%s VALUES(%s)" % (action,
                 self.get_tablename(), fields, holders)
         if len(rows) > 0: #插入更多行
             sql += (", (%s)" % holders) * len(rows)
             for row in rows:
-                keys, values, _fields = self.unzip_pair(row, keys)
+                keys, values, _fields = self.unzip_pairs(row, keys)
                 params.extend(values)
         rs = self.db.execute(sql, *params)
         return rs[1] if rs else 0 #最后的自增ID
         
-    def delete(self, where):
+    def delete(self, **where):
         sql = "DELETE FROM `%s`" % self.get_tablename()
-        if where:
-            self.filter_by(**where)
-        where, params = self.build_where()
-        if where:
-            sql += " WHERE " + where
-        rs = self.db.execute(sql, *params)
+        condition = self.condition
+        if len(where) > 0:
+            condition = condition.clone().extend(**where)
+        rs = self.db.write_sql(sql, condition)
         return rs[0] if rs else -1 #影响的行数
         
-    def update(self, changes, where = {}):
+    def update(self, changes, **where):
         assert isinstance(changes, dict)
-        keys, values, _fields = self.unzip_pair(changes)
+        keys, values, _fields = self.unzip_pairs(changes)
         fields = ",".join(["`%s`=%%s" % key for key in keys])
         sql = "UPDATE `%s` SET %s" % (self.get_tablename(), fields)
-        if where:
-            self.filter_by(**where)
-        where, params = self.build_where()
-        if where:
-            sql += " WHERE " + where
-        params = values + params
-        rs = self.db.execute(sql, *params)
+        condition = self.condition
+        if len(where) > 0:
+            condition = condition.clone().extend(**where)
+        rs = self.db.write_sql(sql, condition, *values)
         return rs[0] if rs else -1 #影响的行数
         
     def save(self, row, indexes = []):
@@ -138,30 +129,21 @@ class Table(object):
             if value is not None:
                 where[index] = value
         if len(where) > 0:
-            return self.update(changes, where)
+            return self.update(changes, **where)
         else:
             return self.insert(changes, action = 'REPLACE INTO')
         
-    def prepare(self, coulmns = '*', addition = ''):
+    def all(self, coulmns = '*', limit = 0, offset = 0, model = dict):
         if isinstance(coulmns, (list,tuple,set)):
             coulmns = ",".join(coulmns)
         sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
-        where, params = self.build_where()
-        if where:
-            sql += " WHERE " + where
-        if addition:
-            sql += " " + addition.strip()
-        return sql, params
-        
-    def all(self, coulmns = '*', limit = 0, offset = 0, model = dict):
         addition = self.build_group_order()
         if limit > 0:
             if offset > 0:
                 addition += " LIMIT %d, %d" % (offset, limit)
             else:
                 addition += " LIMIT %d" % limit
-        sql, params = self.prepare(coulmns, addition)
-        rs = self.db.execute(sql, *params)
+        rs = self.db.read_sql(sql, self.condition, addition)
         return [row for row in self.db.fetch(rs, model = model)]
         
     def one(self, coulmns = '*', model = dict):

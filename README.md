@@ -2,7 +2,7 @@
 
 ## Installation
 
-    pip install rdmysql
+    pip install [--no-deps] rdmysql
 
 It required umysql. If you use pypy, read https://github.com/esnme/ultramysql/pull/58
 
@@ -40,10 +40,10 @@ There are some methods for class named 'Table':
     insert      param *rows
                 param **kwargs
     
-    delete      param where   : dict
+    delete      param **where
     
     update      param changes : dict
-                param where   : dict (optional default={})
+                param **where
     
     save        param changes : dict / object
                 param indexes : list (optional default=[])
@@ -76,10 +76,10 @@ There are some methods for class named 'Table':
 
 Monthly is a subclass of Table, There are other two methods for Monthly:
     
-    backward   param monthes : int (optional default=1)
+    backward    param monthes : int (optional default=1)
     
-    forward    param monthes : int (optional default=1)
+    forward     param monthes : int (optional default=1)
     
-    set_date   param curr_date : date
+    set_date    param curr_date : date
     
-    get_month_diff   param calender : date (optional defaut=today())
+    migrate     param prev_date : date (When curr_has_suffix is False)

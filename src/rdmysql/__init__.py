@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 from .database import Database
 from .table import Table

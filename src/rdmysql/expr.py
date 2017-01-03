@@ -126,6 +126,15 @@ class And(object):
         if isinstance(expr, (Expr, And)):
             self.expressions.append(expr)
         return self
+                
+    def extend(self, **where):
+        for field, value in where.items():
+            self.append(Expr(field) == value)
+        return self
+        
+    def clone(self):
+        klass = self.__class__
+        return klass(*[expr for expr in self.expressions])
         
     def flatten(self):
         wheres, params = [], []
