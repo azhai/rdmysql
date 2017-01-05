@@ -28,8 +28,15 @@ class Daily(Table):
         calender = self.adjust_date(calender)
         return calender.strftime(self.date_format)
         
+    def get_delta_days(self):
+        delta = self.calender - self.adjust_date(date.today())
+        return delta.days
+        
+    def get_diff_units(self):
+        return self.get_delta_days()
+        
     def is_current(self):
-        return self.adjust_date(date.today()) == self.calender
+        return self.get_delta_days() == 0
         
     def get_tablename(self):
         if not self.curr_has_suffix and self.is_current():
@@ -75,6 +82,9 @@ class Weekly(Daily):
         weekday = self.calender.weekday()
         self.calender += timedelta(qty * 7 - weekday)
         return self
+        
+    def get_diff_units(self):
+        return self.get_delta_days() / 7
             
             
 class Monthly(Daily):
@@ -95,3 +105,27 @@ class Monthly(Daily):
         )
         self.calender = date(**ymd)
         return self
+        
+    def get_diff_units(self):
+        today = date.today()
+        return (self.calender.year - today.year) * 12 \
+                + (self.calender.month - today.month)
+        
+        
+class Yearly(Daily):
+    date_format = '%Y'
+        
+    def adjust_date(self, calender):
+        calender = super(Monthly, self).adjust_date(calender)
+        if calender.month > 1 or calender.day > 1:
+            calender = calender.replace(month = 1, day = 1)
+        return calender
+    
+    def forward(self, qty = 1):
+        year = self.calender.year + qty
+        self.calender = date(year, 1, 1)
+        return self
+        
+    def get_diff_units(self):
+        today = date.today()
+        return self.calender.year - today.year
