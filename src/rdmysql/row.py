@@ -12,16 +12,29 @@ class Row(object):
     def __init__(self, data = {}):
         self.merge(data)
         
-    def __getattr__(self, field):
-        if field in self._data:
-            return self._data[field]
+    def __len__(self):
+        return len(self._data)
+        
+    def __getitem__(self, key):
+        if key in self._data:
+            return self._data[key]
+        
+    def __setitem__(self, key, value):
+        self._data[key] = value
+        
+    def __delitem__(self, key):
+        if key in self._data:
+            del self._data[key]
+        
+    def __getattr__(self, key):
+        return self[key]
+        
+    def change(self, key, value):
+        self[key] = value
+        return self
     
     def set_fields(self, fields):
         self._fields = list(fields)
-        return self
-        
-    def change(self, field, value):
-        self._data[field] = value
         return self
     
     def merge(self, data):
@@ -29,12 +42,16 @@ class Row(object):
             data = dict(zip(self._fields, list(data)))
         self._data.update(data)
         return self
+        
+    def iteritems(self):
+        for k, v in self._data.iteritems():
+            yield k, self.coerce_string(v)
+        
+    def items(self):
+        return [item for item in self.iteritems()]
             
     def to_dict(self):
-        data = {}
-        for k, v in self._data.iteritems():
-            data[k] = self.coerce_string(v)
-        return data
+        return dict(self.items())
     
     @staticmethod
     def coerce_string(value):

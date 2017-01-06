@@ -116,22 +116,25 @@ class Table(object):
         rs = self.db.write_sql(sql, condition, *values)
         return rs[0] if rs else -1 #影响的行数
         
-    def save(self, row, indexes = []):
-        if len(indexes) == 0:
+    def save(self, row, indexes = None):
+        assert hasattr(row, 'iteritems')
+        if indexes is None:
             indexes = self.__indexes__
-        if hasattr(row, 'to_dict'):
-            changes = row.to_dict()
-        else:
-            changes = dict(row)
-        where = {}
-        for index in indexes:
-            value = changes.pop(index, None)
-            if value is not None:
-                where[index] = value
+        data, where = {}, {}
+        for key, value in row.iteritems():
+            if key not in indexes:
+                data[key] = value
+            elif value is not None:
+                where[key] = value
+        affect_rows = 0
         if len(where) > 0:
-            return self.update(changes, **where)
+            affect_rows = self.update(data, **where)
+        if not affect_rows:
+            data.update(where)
+            insert_id = self.insert(data, action = 'REPLACE INTO')
+            return True, insert_id
         else:
-            return self.insert(changes, action = 'REPLACE INTO')
+            return False, affect_rows
         
     def all(self, coulmns = '*', limit = 0, offset = 0, model = dict):
         if isinstance(coulmns, (list,tuple,set)):
