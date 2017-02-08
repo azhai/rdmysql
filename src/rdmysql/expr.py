@@ -117,10 +117,12 @@ class Expr(object):
 
 class And(object):
     
-    def __init__(self, *expressions):
+    def __init__(self, *args, **kwargs):
         self.expressions = []
-        for expr in expressions:
+        for expr in args:
             self.append(expr)
+        for field, value in kwargs.iteritems():
+            self.append(Expr(field) == value)
                 
     def append(self, expr):
         if isinstance(expr, (Expr, And)):

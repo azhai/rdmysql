@@ -9,32 +9,32 @@ class Table(object):
     __dbkey__ = 'default'
     __tablename__ = ''
     __indexes__ = ['id']
-    
+
     def __init__(self, tablename = ''):
         if tablename:
             self.__tablename__ = tablename
         self.reset()
-    
+
     @property
     def db(self):
         if not hasattr(self, '_db') or not self._db:
             db = Database(self.__dbkey__)
             self.set_db(db)
         return self._db
-        
+
     def set_db(self, db):
         if isinstance(db, Database):
             self._db = db
         return self
-        
+
     def get_tablename(self):
         return self.__tablename__
-    
+
     def reset(self, or_cond = False):
         self.condition = Or() if or_cond else And()
         self.additions = {}
         return self
-    
+
     def filter(self, expr, *args):
         if isinstance(expr, str):
             expr = Expr(expr).op(*args)
@@ -87,14 +87,14 @@ class Table(object):
         row = rows.pop(0)
         keys, params, fields = self.unzip_pairs(row)
         holders = ",".join(["%s"] * len(params))
-        sql = "%s %s%s VALUES(%s)" % (action,
+        sql = "%s `%s` %s VALUES (%s)" % (action,
                 self.get_tablename(), fields, holders)
         if len(rows) > 0: #插入更多行
             sql += (", (%s)" % holders) * len(rows)
             for row in rows:
                 keys, values, _fields = self.unzip_pairs(row, keys)
                 params.extend(values)
-        rs = self.db.execute(sql, *params)
+        rs = self.db.execute_write(sql, And(), *params)
         return rs[1] if rs else 0 #最后的自增ID
         
     def delete(self, **where):
@@ -102,7 +102,7 @@ class Table(object):
         condition = self.condition
         if len(where) > 0:
             condition = condition.clone().extend(**where)
-        rs = self.db.write_sql(sql, condition)
+        rs = self.db.execute_write(sql, condition)
         return rs[0] if rs else -1 #影响的行数
         
     def update(self, changes, **where):
@@ -113,12 +113,12 @@ class Table(object):
         condition = self.condition
         if len(where) > 0:
             condition = condition.clone().extend(**where)
-        rs = self.db.write_sql(sql, condition, *values)
-        return rs[0] if rs else -1 #影响的行数
+        rs = self.db.execute_write(sql, condition, *values)
+        return rs[0] if rs else -1  #影响的行数
         
     def save(self, row, indexes = None):
         assert hasattr(row, 'iteritems')
-        if indexes is None:
+        if indexes is None:     #使用主键
             indexes = self.__indexes__
         data, where = {}, {}
         for key, value in row.iteritems():
@@ -127,16 +127,16 @@ class Table(object):
             elif value is not None:
                 where[key] = value
         affect_rows = 0
-        if len(where) > 0:
+        if len(where) > 0:      #先尝试更新
             affect_rows = self.update(data, **where)
-        if not affect_rows:
+        if not affect_rows:     #再尝试插入/替换
             data.update(where)
             insert_id = self.insert(data, action = 'REPLACE INTO')
             return True, insert_id
         else:
             return False, affect_rows
         
-    def all(self, coulmns = '*', limit = 0, offset = 0, model = dict):
+    def all(self, coulmns = '*', limit = 0, offset = 0, model = dict, key = None):
         if isinstance(coulmns, (list,tuple,set)):
             coulmns = ",".join(coulmns)
         sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
@@ -146,8 +146,11 @@ class Table(object):
                 addition += " LIMIT %d, %d" % (offset, limit)
             else:
                 addition += " LIMIT %d" % limit
-        rs = self.db.read_sql(sql, self.condition, addition)
-        return [row for row in self.db.fetch(rs, model = model)]
+        rs = self.db.execute_read(sql, self.condition, addition)
+        if key:
+            return [(row[key], row) for row in self.db.fetch(rs, model = model)]
+        else:
+            return [row for row in self.db.fetch(rs, model = model)]
         
     def one(self, coulmns = '*', model = dict):
         rows = self.all(coulmns, limit = 1, model = model)

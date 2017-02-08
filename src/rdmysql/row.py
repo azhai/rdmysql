@@ -7,9 +7,9 @@ from decimal import Decimal
 class Row(object):
     """ 单行结果 """
     _fields = []
-    _data = {}
         
     def __init__(self, data = {}):
+        self._data = {}
         self.merge(data)
         
     def __len__(self):
@@ -28,6 +28,12 @@ class Row(object):
         
     def __getattr__(self, key):
         return self[key]
+        
+    def get(self, key, default = None):
+        if key in self._data:
+            return self._data[key]
+        else:
+            return default
         
     def change(self, key, value):
         self[key] = value

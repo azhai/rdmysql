@@ -4,7 +4,7 @@
 
     pip install [--no-deps] rdmysql
 
-It required umysql. If you use pypy, read https://github.com/esnme/ultramysql/pull/58
+It required umysql. If you use pypy, use https://github.com/NextThought/ultramysql instand of it.
 
 ## Usage:
 

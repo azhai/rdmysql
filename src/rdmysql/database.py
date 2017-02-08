@@ -12,8 +12,9 @@ class Database(object):
     
     def __init__(self, current = 'default'):
         self.current = current
-        self.conn = None
         self.sqls = []
+        self.conn = None
+        self.logger = None
         
     @staticmethod
     def set_charset(conn, charset = 'utf8'):
@@ -23,6 +24,10 @@ class Database(object):
     @classmethod
     def add_configure(cls, name, **configure):
         cls.configures[name] = configure
+        
+    @classmethod
+    def set_logger(cls, logger):
+        cls.logger = logger
         
     def close(self):
         if isinstance(self.conn, umysql.Connection):
@@ -66,18 +71,31 @@ class Database(object):
             """
         return False
         
-    def execute(self, sql, *params):
-        try:
-            rs = self.reconnect().query(sql, params)
-        except umysql.Error as err:
-            if self.is_connection_lost(err):
-                rs = self.reconnect(True).query(sql, params)
+    def add_sql(self, sql, *params, **kwargs):
+        if len(self.sqls) > 50:
+            del self.sqls[:-49]
+        to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
+        full_sql = sql % tuple([to_str(p) for p in params])
+        self.sqls.append(full_sql)
+        if self.logger:
+            type = kwargs.get('type', '')
+            if type and type.lower() == 'write':
+                self.logger.info(full_sql)
             else:
-                rs = None
+                self.logger.debug(full_sql)
+        return full_sql
+        
+    def execute(self, sql, *params, **kwargs):
+        self.add_sql(sql, *params, **kwargs)
+        try:
+            return self.reconnect().query(sql, params)
+        except umysql.Error as err:
+            if self.logger:
+                self.logger.error(err.message or str(err))
+            if self.is_connection_lost(err):
+                return self.reconnect(True).query(sql, params)
+            else:
                 raise err
-        finally:
-            self.add_sql(sql, *params)
-            return rs
         
     @staticmethod
     def fetch(rs, model = dict):
@@ -90,31 +108,25 @@ class Database(object):
                 else:
                     yield model(row)
         
-    def add_sql(self, sql, *params):
-        if len(self.sqls) > 50:
-            del self.sqls[:-49]
-        to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
-        full_sql = sql % tuple([to_str(p) for p in params])
-        self.sqls.append(full_sql)
-        return full_sql
-        
-    def read_sql(self, sql, condition, addition = ''):
+    def execute_read(self, sql, condition, addition = ''):
         assert isinstance(condition, And)
         where, params = condition.build()
         if where:
             sql += " WHERE " + where
         if addition:
             sql += " " + addition.strip()
-        return self.execute(sql, *params)
+        kwargs = {'type': 'read'}
+        return self.execute(sql, *params, **kwargs)
         
-    def write_sql(self, sql, condition, *values):
+    def execute_write(self, sql, condition, *values):
         assert isinstance(condition, And)
         where, params = condition.build()
         if where:
             sql += " WHERE " + where
         if len(values) > 0:
             params = list(values) + params
-        return self.execute(sql, *params)
+        kwargs = {'type': 'write'}
+        return self.execute(sql, *params, **kwargs)
     
     def find_tables(self, name, is_wild = False):
         wildcard = '%' if is_wild else ''
