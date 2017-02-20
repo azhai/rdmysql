@@ -1,9 +1,11 @@
+import sys
+from os.path import join, dirname
+
 from setuptools import setup, find_packages
 
-from os.path import join, dirname
-import sys
 sys.path.insert(0, join(dirname(__file__), 'src'))
 from rdmysql import __version__
+
 sys.path.pop(0)
 
 setup(

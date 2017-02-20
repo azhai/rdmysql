@@ -1,12 +1,11 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 import os.path
 
 PROJECT_DIR = os.path.realpath(os.path.dirname(__file__))
 
-
 MYSQL_CONFS = {
-    "user": { #用户库
+    "user": {  # 用户库
         "drivername": "mysql+mysqldb",
         "host": "127.0.0.1",
         "port": 3306,
@@ -16,7 +15,6 @@ MYSQL_CONFS = {
         "charset": "utf8",
     },
 }
-
 
 """
 -- Table `t_user_profiles`

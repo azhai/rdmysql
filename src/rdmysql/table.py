@@ -10,7 +10,7 @@ class Table(object):
     __tablename__ = ''
     __indexes__ = ['id']
 
-    def __init__(self, tablename = ''):
+    def __init__(self, tablename=''):
         if tablename:
             self.__tablename__ = tablename
         self.reset()
@@ -30,7 +30,7 @@ class Table(object):
     def get_tablename(self):
         return self.__tablename__
 
-    def reset(self, or_cond = False):
+    def reset(self, or_cond=False):
         self.condition = Or() if or_cond else And()
         self.additions = {}
         return self
@@ -40,33 +40,33 @@ class Table(object):
             expr = Expr(expr).op(*args)
         self.condition.append(expr)
         return self
-        
+
     def filter_by(self, **where):
         self.condition.extend(**where)
         return self
-        
-    def order_by(self, field, direction = 'ASC'):
+
+    def order_by(self, field, direction='ASC'):
         if 'ORDER BY' not in self.additions:
             self.additions['ORDER BY'] = []
         order = '%s %s' % (field, direction)
         self.additions['ORDER BY'].append(order)
         return self
-        
+
     def group_by(self, field):
         if 'GROUP BY' not in self.additions:
             self.additions['GROUP BY'] = []
         self.additions['GROUP BY'].append(field)
         return self
-    
+
     def build_group_order(self):
         group_order = ''
         for key, vals in self.additions.items():
             item = ' %s %s' % (key, ', '.join(vals))
             group_order += item
         return group_order
-        
+
     @staticmethod
-    def unzip_pairs(row, keys = []):
+    def unzip_pairs(row, keys=[]):
         if isinstance(row, dict):
             keys = row.keys()
         if len(keys) > 0:
@@ -76,7 +76,7 @@ class Table(object):
             fields = ''
             values = list(row)
         return keys, values, fields
-        
+
     def insert(self, *rows, **kwargs):
         action = kwargs.get('action', 'INSERT INTO')
         if len(rows) == 0:
@@ -88,23 +88,23 @@ class Table(object):
         keys, params, fields = self.unzip_pairs(row)
         holders = ",".join(["%s"] * len(params))
         sql = "%s `%s` %s VALUES (%s)" % (action,
-                self.get_tablename(), fields, holders)
-        if len(rows) > 0: #插入更多行
+                                          self.get_tablename(), fields, holders)
+        if len(rows) > 0:  # 插入更多行
             sql += (", (%s)" % holders) * len(rows)
             for row in rows:
                 keys, values, _fields = self.unzip_pairs(row, keys)
                 params.extend(values)
         rs = self.db.execute_write(sql, And(), *params)
-        return rs[1] if rs else 0 #最后的自增ID
-        
+        return rs[1] if rs else 0  # 最后的自增ID
+
     def delete(self, **where):
         sql = "DELETE FROM `%s`" % self.get_tablename()
         condition = self.condition
         if len(where) > 0:
             condition = condition.clone().extend(**where)
         rs = self.db.execute_write(sql, condition)
-        return rs[0] if rs else -1 #影响的行数
-        
+        return rs[0] if rs else -1  # 影响的行数
+
     def update(self, changes, **where):
         assert isinstance(changes, dict)
         keys, values, _fields = self.unzip_pairs(changes)
@@ -114,11 +114,11 @@ class Table(object):
         if len(where) > 0:
             condition = condition.clone().extend(**where)
         rs = self.db.execute_write(sql, condition, *values)
-        return rs[0] if rs else -1  #影响的行数
-        
-    def save(self, row, indexes = None):
+        return rs[0] if rs else -1  # 影响的行数
+
+    def save(self, row, indexes=None):
         assert hasattr(row, 'iteritems')
-        if indexes is None:     #使用主键
+        if indexes is None:  # 使用主键
             indexes = self.__indexes__
         data, where = {}, {}
         for key, value in row.iteritems():
@@ -127,17 +127,17 @@ class Table(object):
             elif value is not None:
                 where[key] = value
         affect_rows = 0
-        if len(where) > 0:      #先尝试更新
+        if len(where) > 0:  # 先尝试更新
             affect_rows = self.update(data, **where)
-        if not affect_rows:     #再尝试插入/替换
+        if not affect_rows:  # 再尝试插入/替换
             data.update(where)
-            insert_id = self.insert(data, action = 'REPLACE INTO')
+            insert_id = self.insert(data, action='REPLACE INTO')
             return True, insert_id
         else:
             return False, affect_rows
-        
-    def all(self, coulmns = '*', limit = 0, offset = 0, model = dict, key = None):
-        if isinstance(coulmns, (list,tuple,set)):
+
+    def all(self, coulmns='*', limit=0, offset=0, model=dict, key=None):
+        if isinstance(coulmns, (list, tuple, set)):
             coulmns = ",".join(coulmns)
         sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
         addition = self.build_group_order()
@@ -148,17 +148,17 @@ class Table(object):
                 addition += " LIMIT %d" % limit
         rs = self.db.execute_read(sql, self.condition, addition)
         if key:
-            return [(row[key], row) for row in self.db.fetch(rs, model = model)]
+            return [(row[key], row) for row in self.db.fetch(rs, model=model)]
         else:
-            return [row for row in self.db.fetch(rs, model = model)]
-        
-    def one(self, coulmns = '*', model = dict):
-        rows = self.all(coulmns, limit = 1, model = model)
+            return [row for row in self.db.fetch(rs, model=model)]
+
+    def one(self, coulmns='*', model=dict):
+        rows = self.all(coulmns, limit=1, model=model)
         if rows and len(rows) > 0:
             return rows[0]
         elif model is dict:
             return {}
-            
+
     def apply(self, name, *args, **kwargs):
         name = name.strip().upper()
         if name == 'COUNT' and len(args) == 0:
@@ -173,23 +173,23 @@ class Table(object):
         if kwargs.has_key('coerce'):
             result = kwargs['coerce'](result)
         return result
-        
+
     def count(self, *args, **kwargs):
         kwargs['coerce'] = int
         if not kwargs.has_key('default'):
             kwargs['default'] = 0
         return self.apply('count', *args, **kwargs)
-        
+
     def sum(self, *args, **kwargs):
         if not kwargs.has_key('default'):
             kwargs['default'] = 0
         return self.apply('sum', *args, **kwargs)
-        
+
     def max(self, *args, **kwargs):
         return self.apply('max', *args, **kwargs)
-        
+
     def min(self, *args, **kwargs):
         return self.apply('min', *args, **kwargs)
-        
+
     def avg(self, *args, **kwargs):
         return self.apply('avg', *args, **kwargs)

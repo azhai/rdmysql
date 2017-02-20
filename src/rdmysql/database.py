@@ -1,49 +1,50 @@
 # -*- coding: utf-8 -*-
 
 import umysql
+
 from .expr import And
 
 
 class Database(object):
     """ MySQL数据库 """
-    
+
     configures = {}
     connections = {}
-    
-    def __init__(self, current = 'default'):
+
+    def __init__(self, current='default'):
         self.current = current
         self.sqls = []
         self.conn = None
         self.logger = None
-        
+
     @staticmethod
-    def set_charset(conn, charset = 'utf8'):
+    def set_charset(conn, charset='utf8'):
         sql = "SET NAMES '%s'" % charset
         return conn.query(sql)
-        
+
     @classmethod
     def add_configure(cls, name, **configure):
         cls.configures[name] = configure
-        
+
     @classmethod
     def set_logger(cls, logger):
         cls.logger = logger
-        
+
     def close(self):
         if isinstance(self.conn, umysql.Connection):
             self.conn.close()
         self.__class__.connections.pop(self.current)
-        
-    def reconnect(self, force = False, **env):
-        if not self.conn: #重用连接
+
+    def reconnect(self, force=False, **env):
+        if not self.conn:  # 重用连接
             self.conn = self.__class__.connections.get(self.current)
-        if force and self.conn: #强制重连
+        if force and self.conn:  # 强制重连
             self.conn.close()
-        if force or not self.conn or not self.conn.is_connected(): #需要时连接
+        if force or not self.conn or not self.conn.is_connected():  # 需要时连接
             self.conn = self.connect(self.current)
             self.__class__.connections[self.current] = self.conn
         return self.conn
-        
+
     def connect(self, current):
         conf = self.__class__.configures.get(current, {})
         conn = umysql.Connection()
@@ -70,7 +71,7 @@ class Database(object):
                 return True
             """
         return False
-        
+
     def add_sql(self, sql, *params, **kwargs):
         if len(self.sqls) > 50:
             del self.sqls[:-49]
@@ -84,7 +85,7 @@ class Database(object):
             else:
                 self.logger.debug(full_sql)
         return full_sql
-        
+
     def execute(self, sql, *params, **kwargs):
         self.add_sql(sql, *params, **kwargs)
         try:
@@ -96,9 +97,9 @@ class Database(object):
                 return self.reconnect(True).query(sql, params)
             else:
                 raise err
-        
+
     @staticmethod
-    def fetch(rs, model = dict):
+    def fetch(rs, model=dict):
         if isinstance(rs, umysql.ResultSet):
             fs = [f[0] for f in rs.fields]
             for r in rs.rows:
@@ -107,8 +108,8 @@ class Database(object):
                     yield row
                 else:
                     yield model(row)
-        
-    def execute_read(self, sql, condition, addition = ''):
+
+    def execute_read(self, sql, condition, addition=''):
         assert isinstance(condition, And)
         where, params = condition.build()
         if where:
@@ -117,7 +118,7 @@ class Database(object):
             sql += " " + addition.strip()
         kwargs = {'type': 'read'}
         return self.execute(sql, *params, **kwargs)
-        
+
     def execute_write(self, sql, condition, *values):
         assert isinstance(condition, And)
         where, params = condition.build()
@@ -127,13 +128,13 @@ class Database(object):
             params = list(values) + params
         kwargs = {'type': 'write'}
         return self.execute(sql, *params, **kwargs)
-    
-    def find_tables(self, name, is_wild = False):
+
+    def find_tables(self, name, is_wild=False):
         wildcard = '%' if is_wild else ''
         sql = "SHOW TABLES LIKE `%s`" % (name + wildcard)
         rs = self.execute(sql)
         return [row[0] for row in rs.rows]
-    
+
     def is_exists(self, name):
         tables = self.find_tables(name)
         return len(tables) > 0
