@@ -140,15 +140,14 @@ class Table(object):
         if isinstance(coulmns, (list, tuple, set)):
             coulmns = ",".join(coulmns)
         sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
-        addition = self.build_group_order()
+        group_order = self.build_group_order()
         total = offset + limit
         while limit <= 0 or offset < total:
+            addition = group_order
             if step > 0:
-                add = " LIMIT %d, %d" % (offset, step)
+                addition += " LIMIT %d, %d" % (offset, step)
                 offset += step
-            else:
-                add = ""
-            rs = self.db.execute_read(sql, self.condition, addition + add)
+            rs = self.db.execute_read(sql, self.condition, addition)
             if len(rs.rows) == 0:
                 break
             for row in self.db.fetch(rs, model=model):
