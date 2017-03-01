@@ -136,21 +136,34 @@ class Table(object):
         else:
             return False, affect_rows
 
-    def all(self, coulmns='*', limit=0, offset=0, model=dict, key=None):
+    def iter(self, coulmns='*', limit=-1, offset=0, step=0, model=dict):
         if isinstance(coulmns, (list, tuple, set)):
             coulmns = ",".join(coulmns)
         sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
         addition = self.build_group_order()
-        if limit > 0:
-            if offset > 0:
-                addition += " LIMIT %d, %d" % (offset, limit)
+        total = offset + limit
+        while limit <= 0 or offset < total:
+            if step > 0:
+                add = " LIMIT %d, %d" % (offset, step)
+                offset += step
             else:
-                addition += " LIMIT %d" % limit
-        rs = self.db.execute_read(sql, self.condition, addition)
+                add = ""
+            rs = self.db.execute_read(sql, self.condition, addition + add)
+            if len(rs.rows) == 0:
+                break
+            for row in self.db.fetch(rs, model=model):
+                yield row
+            if step <= 0:
+                break
+
+    def all(self, coulmns='*', limit=-1, offset=0, step=0, model=dict, key=None):
+        if limit > 0:
+            step = min(limit, step) if step > 0 else limit
+        kwargs = dict(limit=limit, offset=offset, step=step, model=model)
         if key:
-            return [(row[key], row) for row in self.db.fetch(rs, model=model)]
+            return [(row[key], row) for row in self.iter(coulmns, **kwargs)]
         else:
-            return [row for row in self.db.fetch(rs, model=model)]
+            return [row for row in self.iter(coulmns, **kwargs)]
 
     def one(self, coulmns='*', model=dict):
         rows = self.all(coulmns, limit=1, model=model)
