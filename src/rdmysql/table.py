@@ -144,7 +144,7 @@ class Table(object):
         """
         limit = int(kwargs.get('limit', -1))
         offset = int(kwargs.get('offset', 0))
-        step = int(kwargs.get('step', 250000))
+        step = int(kwargs.get('step', 150000))
         total = 0
         if limit > 0:
             total = offset + limit
