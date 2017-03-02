@@ -181,7 +181,7 @@ class Table(object):
             return result
 
     def one(self, coulmns='*', model=dict):
-        rows = self.all(coulmns, limit=1, model=model)
+        rows = self.all(coulmns, model=model, limit=1)
         if rows and len(rows) > 0:
             return rows[0]
         elif model is dict:
