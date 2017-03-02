@@ -136,12 +136,26 @@ class Table(object):
         else:
             return False, affect_rows
 
-    def iter(self, coulmns='*', limit=-1, offset=0, step=0, model=dict):
+    def iter(self, coulmns='*', model=dict, **kwargs):
+        """
+        分批读取数据，注意设置step或limit的值
+            Error: Socket receive buffer full
+            当一次读取的内容超长时，需要设置step为较小值
+        """
+        limit = int(kwargs.get('limit', -1))
+        offset = int(kwargs.get('offset', 0))
+        step = int(kwargs.get('step', 250000))
+        total = 0
+        if limit > 0:
+            total = offset + limit
+            if step > 0：
+                step = min(limit, step)
+            else:
+                step = limit
         if isinstance(coulmns, (list, tuple, set)):
             coulmns = ",".join(coulmns)
         sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
         group_order = self.build_group_order()
-        total = offset + limit
         while limit <= 0 or offset < total:
             addition = group_order
             if step > 0:
@@ -155,14 +169,16 @@ class Table(object):
             if step <= 0:
                 break
 
-    def all(self, coulmns='*', limit=-1, offset=0, step=0, model=dict, key=None):
-        if limit > 0:
-            step = min(limit, step) if step > 0 else limit
-        kwargs = dict(limit=limit, offset=offset, step=step, model=model)
-        if key:
-            return [(row[key], row) for row in self.iter(coulmns, **kwargs)]
+    def all(self, coulmns='*', model=dict, index=None, **kwargs):
+        if index is None:
+            return [row for row in self.iter(coulmns, model, **kwargs)]
         else:
-            return [row for row in self.iter(coulmns, **kwargs)]
+            result = []
+            for row in self.iter(coulmns, model, **kwargs):
+                key = row.get(index, None)
+                if key is not None:
+                    result.append((key, row))
+            return result
 
     def one(self, coulmns='*', model=dict):
         rows = self.all(coulmns, limit=1, model=model)
