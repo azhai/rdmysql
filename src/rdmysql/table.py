@@ -148,7 +148,7 @@ class Table(object):
         total = 0
         if limit > 0:
             total = offset + limit
-            if step > 0：
+            if step > 0:
                 step = min(limit, step)
             else:
                 step = limit
