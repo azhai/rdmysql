@@ -16,10 +16,13 @@ class Expr(object):
     @property
     def field(self):
         if not self._field and self.orig_field:
-            self._field = '`%s`' % self.orig_field
-            if self.orig_table:
-                table = '`%s`' % self.orig_table
-                self._field = '%s.%s' % (table, self._field)
+            if '(' in self.orig_field or '`' in self.orig_field:
+                self._field = '%s' % self.orig_field
+            else:
+                self._field = '`%s`' % self.orig_field
+                if self.orig_table:
+                    table = '`%s`' % self.orig_table
+                    self._field = '%s.%s' % (table, self._field)
         return self._field
 
     def flatten(self):
