@@ -29,6 +29,11 @@ class Table(object):
 
     def get_tablename(self):
         return self.__tablename__
+        
+    def is_exists(self):
+        name = self.get_tablename()
+        tables = self.db.get_exist_tablenames(name, False)
+        return len(tables) > 0
 
     def reset(self, or_cond=False):
         self.condition = Or() if or_cond else And()
@@ -107,8 +112,16 @@ class Table(object):
 
     def update(self, changes, **where):
         assert isinstance(changes, dict)
-        keys, values, _fields = self.unzip_pairs(changes)
-        fields = ",".join(["`%s`=%%s" % key for key in keys])
+        holders, values = [], []
+        for key, value in changes.iteritems():
+            if isinstance(value, Expr):
+                exps, vals = value.build()
+                holders.append("`%s`=%s" % (key, exps))
+                values.extend(vals)
+            else:
+                holders.append("`%s`=%%s" % key)
+                values.append(value)
+        fields = ",".join(holders)
         sql = "UPDATE `%s` SET %s" % (self.get_tablename(), fields)
         condition = self.condition
         if len(where) > 0:

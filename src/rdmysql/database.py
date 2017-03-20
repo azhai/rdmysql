@@ -129,10 +129,10 @@ class Database(object):
         kwargs = {'type': 'write'}
         return self.execute(sql, *params, **kwargs)
 
-    def find_tables(self, name, is_wild=False):
+    def get_exist_tablenames(self, name, is_wild=False):
         wildcard = '%' if is_wild else ''
-        sql = "SHOW TABLES LIKE `%s`" % (name + wildcard)
-        rs = self.execute(sql)
+        sql = "SHOW TABLES LIKE %s"
+        rs = self.execute(sql, name + wildcard, type = 'read')
         return [row[0] for row in rs.rows]
 
     def is_exists(self, name):
