@@ -41,6 +41,12 @@ class Expr(object):
         if other.field == self.field:
             self.conds.extend(other.conds)
         return self
+        
+    def first_param(self):
+        if self.conds:
+            values = self.conds[0][1]
+            if values:
+                return values[0]
 
     def _op(self, opname):
         if '%' not in opname:

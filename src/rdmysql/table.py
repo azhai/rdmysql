@@ -74,12 +74,13 @@ class Table(object):
     def unzip_pairs(row, keys=[]):
         if isinstance(row, dict):
             keys = row.keys()
+        to_val = lambda v: v.first_param() if isinstance(v, Expr) else v
         if len(keys) > 0:
             fields = "(`%s`)" % "`,`".join(keys)
-            values = [row[key] for key in keys]
+            values = [to_val(row[key]) for key in keys]
         else:
             fields = ''
-            values = list(row)
+            values = [to_val(val) for val in list(row)]
         return keys, values, fields
 
     def insert(self, *rows, **kwargs):
@@ -93,7 +94,7 @@ class Table(object):
         keys, params, fields = self.unzip_pairs(row)
         holders = ",".join(["%s"] * len(params))
         sql = "%s `%s` %s VALUES (%s)" % (action,
-                                          self.get_tablename(), fields, holders)
+                self.get_tablename(), fields, holders)
         if len(rows) > 0:  # 插入更多行
             sql += (", (%s)" % holders) * len(rows)
             for row in rows:
