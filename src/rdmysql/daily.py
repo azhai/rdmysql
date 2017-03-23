@@ -2,12 +2,11 @@
 
 from datetime import date, datetime, timedelta
 
-from .table import Table
+from .archive import Archive
 
 
-class Daily(Table):
-    date_format = '%Y%m%d'
-    curr_has_suffix = False
+class Daily(Archive):
+    suffix_mask = '%Y%m%d'
 
     def __init__(self, tablename=''):
         super(Daily, self).__init__(tablename)
@@ -23,12 +22,6 @@ class Daily(Table):
             calender = calender.date()
         return calender
 
-    def get_suffix(self, calender=None):
-        if not calender:
-            calender = self.calender
-        calender = self.adjust_date(calender)
-        return calender.strftime(self.date_format)
-
     def get_delta_days(self):
         delta = self.calender - self.adjust_date(date.today())
         return delta.days
@@ -36,14 +29,11 @@ class Daily(Table):
     def get_diff_units(self):
         return self.get_delta_days()
 
-    def is_current(self):
-        return self.get_delta_days() == 0
-
-    def get_tablename(self):
-        if not self.curr_has_suffix and self.is_current():
-            return self.__tablename__
-        else:
-            return '%s_%s' % (self.__tablename__, self.get_suffix())
+    def get_suffix(self, calender=None):
+        if not calender:
+            calender = self.calender
+        calender = self.adjust_date(calender)
+        return calender.strftime(self.suffix_mask)
 
     def forward(self, qty=1):
         self.calender += timedelta(qty)
@@ -53,24 +43,24 @@ class Daily(Table):
         return self.forward(0 - qty)
 
     def migrate(self, prev_date, **where):
-        assert self.curr_has_suffix is False
-        table = self.__tablename__
-        suffix = self.get_suffix(prev_date)
-        csql = "CREATE TABLE IF NOT EXISTS `%s_%s` LIKE `%s`" % (
-            table, suffix, table)
-        self.db.execute(csql)
-        isql = "INSERT DELAYED `%s_%s` SELECT * FROM `%s`" % (
-            table, suffix, table)
-        rs = self.db.write_sql(isql, **where)
-        dsql = "DELETE FROM `%s`" % table
-        self.db.write_sql(dsql, **where)
-        return rs[0] if rs else -1  # 影响的行数
+        self.set_date(prev_date)
+        prev_name = self.get_tablename(quote=True)
+        if self.is_exists():
+            return 0
+        self.set_date(date.today())
+        curr_name = self.get_tablename(quote=True)
+        tableinfo = self.get_tableinfo(['TABLE_ROWS', 'AUTO_INCREMENT'])
+        if where or tableinfo['TABLE_ROWS'] <= 5000:
+            return self.partial_migrate(curr_name, prev_name, **where)
+        else:
+            autoincr = tableinfo['AUTO_INCREMENT']
+            return self.quick_migrate(curr_name, prev_name, autoincr)
 
 
 class Weekly(Daily):
     """ 以周日为一周开始，跨年的一周算作前一年最后一周 """
 
-    date_format = '%Y0%U'
+    suffix_mask = '%Y0%U'
 
     def adjust_date(self, calender):
         calender = super(Weekly, self).adjust_date(calender)
@@ -89,7 +79,7 @@ class Weekly(Daily):
 
 
 class Monthly(Daily):
-    date_format = '%Y%m'
+    suffix_mask = '%Y%m'
 
     def adjust_date(self, calender):
         calender = super(Monthly, self).adjust_date(calender)
@@ -114,7 +104,7 @@ class Monthly(Daily):
 
 
 class Yearly(Daily):
-    date_format = '%Y'
+    suffix_mask = '%Y'
 
     def adjust_date(self, calender):
         calender = super(Monthly, self).adjust_date(calender)

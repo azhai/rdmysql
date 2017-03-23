@@ -27,12 +27,25 @@ class Table(object):
             self._db = db
         return self
 
-    def get_tablename(self):
-        return self.__tablename__
+    def get_tablename(self, quote = False):
+        if quote:
+            return '`%s`' % self.__tablename__
+        else:
+            return self.__tablename__
+
+    def get_tableinfo(self, columns='*'):
+        if isinstance(columns, (list, tuple, set)):
+            columns = ",".join(columns)
+        dbname = self.db.get_dbname()
+        tablename = self.get_tablename(quote = False)
+        sql = "SELECT %s FROM `information_schema`.`TABLES`" % columns
+        condition = And(TABLE_SCHEMA = dbname, TABLE_NAME = tablename)
+        rs = self.db.execute_read(sql, condition)
+        return rs.rows[0] if rs.rows else {}
         
     def is_exists(self):
-        name = self.get_tablename()
-        tables = self.db.get_exist_tablenames(name, False)
+        tablename = self.get_tablename(quote = False)
+        tables = self.db.get_exist_tables(tablename, False)
         return len(tables) > 0
 
     def reset(self, or_cond=False):
@@ -93,8 +106,9 @@ class Table(object):
         row = rows.pop(0)
         keys, params, fields = self.unzip_pairs(row)
         holders = ",".join(["%s"] * len(params))
-        sql = "%s `%s` %s VALUES (%s)" % (action,
-                self.get_tablename(), fields, holders)
+        tablename = self.get_tablename(quote = True)
+        sql = "%s %s %s VALUES (%s)" % (action,
+                tablename, fields, holders)
         if len(rows) > 0:  # 插入更多行
             sql += (", (%s)" % holders) * len(rows)
             for row in rows:
@@ -104,7 +118,8 @@ class Table(object):
         return rs[1] if rs else 0  # 最后的自增ID
 
     def delete(self, **where):
-        sql = "DELETE FROM `%s`" % self.get_tablename()
+        tablename = self.get_tablename(quote = True)
+        sql = "DELETE FROM %s" % tablename
         condition = self.condition
         if len(where) > 0:
             condition = condition.clone().extend(**where)
@@ -123,7 +138,8 @@ class Table(object):
                 holders.append("`%s`=%%s" % key)
                 values.append(value)
         fields = ",".join(holders)
-        sql = "UPDATE `%s` SET %s" % (self.get_tablename(), fields)
+        tablename = self.get_tablename(quote = True)
+        sql = "UPDATE %s SET %s" % (tablename, fields)
         condition = self.condition
         if len(where) > 0:
             condition = condition.clone().extend(**where)
@@ -150,7 +166,7 @@ class Table(object):
         else:
             return False, affect_rows
 
-    def iter(self, coulmns='*', model=dict, **kwargs):
+    def iter(self, columns='*', model=dict, **kwargs):
         """
         分批读取数据，注意设置step或limit的值
             Error: Socket receive buffer full
@@ -166,9 +182,10 @@ class Table(object):
                 step = min(limit, step)
             else:
                 step = limit
-        if isinstance(coulmns, (list, tuple, set)):
-            coulmns = ",".join(coulmns)
-        sql = "SELECT %s FROM `%s`" % (coulmns, self.get_tablename())
+        if isinstance(columns, (list, tuple, set)):
+            columns = ",".join(columns)
+        tablename = self.get_tablename(quote = True)
+        sql = "SELECT %s FROM %s" % (columns, tablename)
         group_order = self.build_group_order()
         while limit <= 0 or offset < total:
             addition = group_order
@@ -183,19 +200,19 @@ class Table(object):
             if step <= 0:
                 break
 
-    def all(self, coulmns='*', model=dict, index=None, **kwargs):
+    def all(self, columns='*', model=dict, index=None, **kwargs):
         if index is None:
-            return [row for row in self.iter(coulmns, model, **kwargs)]
+            return [row for row in self.iter(columns, model, **kwargs)]
         else:
             result = []
-            for row in self.iter(coulmns, model, **kwargs):
+            for row in self.iter(columns, model, **kwargs):
                 key = row.get(index, None)
                 if key is not None:
                     result.append((key, row))
             return result
 
-    def one(self, coulmns='*', model=dict):
-        rows = self.all(coulmns, model=model, limit=1)
+    def one(self, columns='*', model=dict):
+        rows = self.all(columns, model=model, limit=1)
         if rows and len(rows) > 0:
             return rows[0]
         elif model is dict:

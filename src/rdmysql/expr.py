@@ -125,12 +125,12 @@ class Expr(object):
 
 
 class And(object):
+    """ 与 """
     def __init__(self, *args, **kwargs):
         self.expressions = []
         for expr in args:
             self.append(expr)
-        for field, value in kwargs.iteritems():
-            self.append(Expr(field) == value)
+        self.extend(**kwargs)
 
     def append(self, expr):
         if isinstance(expr, (Expr, And)):
@@ -138,7 +138,7 @@ class And(object):
         return self
 
     def extend(self, **where):
-        for field, value in where.items():
+        for field, value in where.iteritems():
             self.append(Expr(field) == value)
         return self
 
@@ -161,6 +161,7 @@ class And(object):
 
 
 class Or(And):
+    """ 或 """
     def build(self):
         wheres, params = self.flatten()
         or_where = ' OR '.join(wheres)

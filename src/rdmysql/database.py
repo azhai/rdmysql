@@ -13,6 +13,7 @@ class Database(object):
 
     def __init__(self, current='default'):
         self.current = current
+        self.readonly = False
         self.sqls = []
         self.conn = None
         self.logger = None
@@ -47,14 +48,15 @@ class Database(object):
 
     def connect(self, current):
         conf = self.__class__.configures.get(current, {})
-        conn = umysql.Connection()
         host = conf.get('host', '127.0.0.1')
         port = int(conf.get('port', 3306))
         username = conf.get('username', 'root')
         password = conf.get('password', '')
         dbname = conf.get('database', '')
+        conn = umysql.Connection()
         conn.connect(host, port, username, password, dbname)
         self.set_charset(conn, conf.get('charset', 'utf8'))
+        self.readonly = conf.get('readonly', False)
         return conn
 
     def is_connection_lost(self, err):
@@ -72,22 +74,28 @@ class Database(object):
             """
         return False
 
-    def add_sql(self, sql, *params, **kwargs):
+    def add_sql(self, sql, *params, is_write = False):
         if len(self.sqls) > 50:
             del self.sqls[:-49]
         to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
         full_sql = sql % tuple([to_str(p) for p in params])
         self.sqls.append(full_sql)
         if self.logger:
-            type = kwargs.get('type', '')
-            if type and type.lower() == 'write':
+            if is_write:
                 self.logger.info(full_sql)
             else:
                 self.logger.debug(full_sql)
         return full_sql
 
     def execute(self, sql, *params, **kwargs):
-        self.add_sql(sql, *params, **kwargs)
+        type = kwargs.get('type', '')
+        if type and type.lower() == 'write':
+            is_write = True
+        else:
+            is_write = False
+        self.add_sql(sql, *params, is_write = is_write)
+        if is_write and self.readonly: #只读，不执行
+            return
         try:
             return self.reconnect().query(sql, params)
         except umysql.Error as err:
@@ -129,12 +137,15 @@ class Database(object):
         kwargs = {'type': 'write'}
         return self.execute(sql, *params, **kwargs)
 
-    def get_exist_tablenames(self, name, is_wild=False):
-        wildcard = '%' if is_wild else ''
-        sql = "SHOW TABLES LIKE %s"
-        rs = self.execute(sql, name + wildcard, type = 'read')
-        return [row[0] for row in rs.rows]
+    def get_dbname(self):
+        sql = "SELECT DATABASE()"
+        rs = self.execute(sql, type='read')
+        if rs.rows:
+            return rs.rows[0]['DATABASE()']
 
-    def is_exists(self, name):
-        tables = self.find_tables(name)
-        return len(tables) > 0
+    def get_exist_tables(self, name = '', is_wild=False):
+        sql = "SHOW TABLES LIKE %s"
+        if is_wild:
+            name += '%'
+        rs = self.execute(sql, name, type = 'read')
+        return [row[0] for row in rs.rows]
