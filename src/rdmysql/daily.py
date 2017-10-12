@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from datetime import date, datetime, timedelta
-
 from .archive import Archive
 
 
@@ -48,13 +47,7 @@ class Daily(Archive):
         if self.is_exists():
             return 0
         self.set_date(date.today())
-        curr_name = self.get_tablename(quote=True)
-        tableinfo = self.get_tableinfo(['TABLE_ROWS', 'AUTO_INCREMENT'])
-        if where or tableinfo['TABLE_ROWS'] <= 5000:
-            return self.partial_migrate(curr_name, prev_name, **where)
-        else:
-            autoincr = tableinfo['AUTO_INCREMENT']
-            return self.quick_migrate(curr_name, prev_name, autoincr)
+        return self._migrate(prev_name, **where)
 
 
 class Weekly(Daily):
@@ -88,19 +81,20 @@ class Monthly(Daily):
         return calender
 
     def forward(self, qty=1):
-        total = self.calender.month + qty - 1
+        offset = self.calender.month + qty - 1
         ymd = dict(
-            year=self.calender.year + total / 12,
-            month=total % 12 + 1,
-            day=1,
+            year = self.calender.year + offset / 12, #负数除法向下取整
+            month = offset % 12 + 1, #负数求余结果也是正数或零
+            day = 1,
         )
         self.calender = date(**ymd)
         return self
 
     def get_diff_units(self):
         today = date.today()
-        return (self.calender.year - today.year) * 12 \
-               + (self.calender.month - today.month)
+        result = self.calender.month - today.month
+        result += (self.calender.year - today.year) * 12
+        return result
 
 
 class Yearly(Daily):

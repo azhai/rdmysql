@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import umysql
-
 from .expr import And
 
 

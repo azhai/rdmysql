@@ -32,15 +32,15 @@ class Archive(Table):
         else:
             return '%s_%s' % (self.__tablename__, self.get_suffix())
 
-    def quick_migrate(self, curr_name, prev_name, autoincr = 0):
+    def quick_migrate(self, curr_name, prev_name, auto_incr = 0):
         rsql = "RENAME TABLE %s TO %" % (curr_name, prev_name)
         self.db.execute(rsql, type = 'write')
         csql = "CREATE TABLE IF NOT EXISTS %s LIKE %s" % (curr_name, prev_name)
         self.db.execute(csql, type = 'write')
-        if autoincr:
+        if auto_incr:
             asql = "ALTER TABLE %s AUTO_INCREMENT = %%d" % curr_name
-            self.db.execute(asql, autoincr, type = 'write')
-        return autoincr  # 自增ID
+            self.db.execute(asql, auto_incr, type = 'write')
+        return auto_incr  # 自增ID
 
     def partial_migrate(self, curr_name, prev_name, **where):
         where['type'] = 'write'
@@ -52,16 +52,19 @@ class Archive(Table):
         self.db.execute(dsql, **where)
         return rs[0] if rs else -1  # 影响的行数
 
+    def _migrate(self, prev_name, **where):
+        curr_name = self.get_tablename(quote=True)
+        table_info = self.get_tableinfo(['TABLE_ROWS', 'AUTO_INCREMENT'])
+        if where or table_info['TABLE_ROWS'] <= 5000:
+            return self.partial_migrate(curr_name, prev_name, **where)
+        else:
+            auto_incr = table_info['AUTO_INCREMENT']
+            return self.quick_migrate(curr_name, prev_name, auto_incr)
+
     def migrate(self, number, **where):
         self.set_number(number)
         prev_name = self.get_tablename(quote=True)
         if self.is_exists():
             return 0
         self.set_number()
-        curr_name = self.get_tablename(quote=True)
-        tableinfo = self.get_tableinfo(['TABLE_ROWS', 'AUTO_INCREMENT'])
-        if where or tableinfo['TABLE_ROWS'] <= 5000:
-            return self.partial_migrate(curr_name, prev_name, **where)
-        else:
-            autoincr = tableinfo['AUTO_INCREMENT']
-            return self.quick_migrate(curr_name, prev_name, autoincr)
+        return self._migrate(prev_name, **where)
