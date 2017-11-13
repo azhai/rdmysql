@@ -1,12 +1,9 @@
 import sys
 from os.path import join, dirname
-
 from setuptools import setup, find_packages
-
 sys.path.insert(0, join(dirname(__file__), 'src'))
 from rdmysql import __version__
 
-sys.path.pop(0)
 
 setup(
     name="rdmysql",
@@ -26,6 +23,10 @@ setup(
     keywords=["mysql", "database", "model"],
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    install_requires=['ultramysql'],
-    dependency_links=['https://github.com/azhai/ultramysql/tarball/master#egg=ultramysql-2.62.dev0'],
+    install_requires=[
+        "umysql>2.61",
+    ],
+    dependency_links=[
+        "git+ssh://git@github.com/azhai/ultramysql.git@2.62.dev0#egg=mayo-2.62.dev0",
+    ]
 )
