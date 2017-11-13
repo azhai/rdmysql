@@ -73,7 +73,8 @@ class Database(object):
             """
         return False
 
-    def add_sql(self, sql, *params, is_write = False):
+    def add_sql(self, sql, *params, **kwargs):
+        is_write = kwargs.get('is_write', False)
         if len(self.sqls) > 50:
             del self.sqls[:-49]
         to_str = lambda p: u"NULL" if p is None else u"'%s'" % p
