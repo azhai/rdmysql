@@ -2,6 +2,7 @@
 
 __version__ = "0.1.2"
 
+from .archive import Archive
 from .daily import Daily, Weekly, Monthly
 from .database import Database
 from .expr import Expr, And, Or
