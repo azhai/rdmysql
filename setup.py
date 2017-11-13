@@ -26,5 +26,5 @@ setup(
     keywords=["mysql", "database", "model"],
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    install_requires=['umysql'],
+    #install_requires=['umysql'],
 )
