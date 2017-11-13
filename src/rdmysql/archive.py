@@ -26,11 +26,15 @@ class Archive(Table):
             number = self.number
         return self.suffix_mask % number
 
-    def get_tablename(self):
+    def get_tablename(self, quote = False):
         if not self.curr_has_suffix and self.is_current():
-            return self.__tablename__
+            tablename = self.__tablename__
         else:
-            return '%s_%s' % (self.__tablename__, self.get_suffix())
+            tablename = '%s_%s' % (self.__tablename__, self.get_suffix())
+        if quote:
+            return self.quote_str(tablename)
+        else:
+            return tablename
 
     def quick_migrate(self, curr_name, prev_name, auto_incr = 0):
         rsql = "RENAME TABLE %s TO %" % (curr_name, prev_name)
