@@ -26,5 +26,6 @@ setup(
     keywords=["mysql", "database", "model"],
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    #install_requires=['umysql'],
+    install_requires=['ultramysql'],
+    dependency_links=['https://github.com/azhai/ultramysql/tarball/master#egg=ultramysql-2.62.dev0'],
 )

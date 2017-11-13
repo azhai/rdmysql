@@ -4,8 +4,8 @@ from .table import Table
 
 
 class Archive(Table):
-    suffix_mask = '%03d'
     curr_has_suffix = False
+    suffix_mask = '%03d'
 
     def __init__(self, tablename=''):
         super(Archive, self).__init__(tablename)
