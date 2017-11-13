@@ -14,6 +14,9 @@ class Table(object):
         if tablename:
             self.__tablename__ = tablename
         self.reset()
+        
+    def quote_str(self, name):
+        return '`%s`' % name
 
     @property
     def db(self):
@@ -29,7 +32,7 @@ class Table(object):
 
     def get_tablename(self, quote = False):
         if quote:
-            return '`%s`' % self.__tablename__
+            return self.quote_str(self.__tablename__)
         else:
             return self.__tablename__
 
