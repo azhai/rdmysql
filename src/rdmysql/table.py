@@ -6,6 +6,7 @@ from .expr import Expr, And, Or
 
 class Table(object):
     """ 数据表 """
+
     __dbkey__ = 'default'
     __tablename__ = ''
     __indexes__ = ['id']
@@ -36,7 +37,15 @@ class Table(object):
         else:
             return self.__tablename__
 
-    def get_tableinfo(self, columns=['TABLE_ROWS', 'TABLE_COMMENT']):
+    def get_table_name(self, quote=False):
+        return self.get_table_name(quote=quote)
+
+    def is_table_exists(self):
+        tablename = self.get_tablename(quote=False)
+        tables = self.db.list_tables(tablename, False)
+        return len(tables) > 0
+
+    def get_table_info(self, columns=['TABLE_ROWS', 'TABLE_COMMENT']):
         if isinstance(columns, (list, tuple, set)):
             columns = ",".join(columns)
         dbname = self.db.get_dbname()
@@ -49,7 +58,7 @@ class Table(object):
         else:
             return {}
 
-    def get_fields(self, columns=['COLUMN_NAME', 'IS_NULLABLE',
+    def get_table_fields(self, columns=['COLUMN_NAME', 'IS_NULLABLE',
                 'DATA_TYPE', 'COLUMN_TYPE', 'COLUMN_COMMENT']):
         if isinstance(columns, (list, tuple, set)):
             columns = ",".join(columns)
@@ -63,11 +72,6 @@ class Table(object):
             return [f for f in self.db.fetch(rs)]
         else:
             return []
-
-    def is_exists(self):
-        tablename = self.get_tablename(quote=False)
-        tables = self.db.get_exist_tables(tablename, False)
-        return len(tables) > 0
 
     def reset(self, or_cond=False):
         self.condition = Or() if or_cond else And()

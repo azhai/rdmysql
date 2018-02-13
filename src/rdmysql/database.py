@@ -46,6 +46,7 @@ class Database(object):
         return self.conn
 
     def connect(self, current):
+        """ 根据配置连接数据库 """
         conf = self.__class__.configures.get(current, {})
         host = conf.get('host', '127.0.0.1')
         port = int(conf.get('port', 3306))
@@ -59,6 +60,7 @@ class Database(object):
         return conn
 
     def is_connection_lost(self, err):
+        """ 检测连接是否断开 """
         if isinstance(err, umysql.Error):
             errmsg = err.message
             if errmsg.startswith('Connection reset by peer'):
@@ -71,9 +73,13 @@ class Database(object):
             elif errmsg.startswith('Access denied for user'):
                 return True
             """
+        elif isinstance(err, socket.error):
+            if 'Broken pipe' in str(err):
+                return True
         return False
 
     def add_sql(self, sql, *params, **kwargs):
+        """ 将当前SQL记录到历史中 """
         is_write = kwargs.get('is_write', False)
         if len(self.sqls) > 50:
             del self.sqls[:-49]
@@ -106,7 +112,30 @@ class Database(object):
             else:
                 raise err
 
+    def execute_write(self, sql, condition, *values):
+        """ 执行写操作，返回结果tuple """
+        assert isinstance(condition, And)
+        where, params = condition.build()
+        if where:
+            sql += " WHERE " + where
+        if len(values) > 0:
+            params = list(values) + params
+        kwargs = {'type': 'write'}
+        return self.execute(sql, *params, **kwargs)
+
+    def execute_read(self, sql, condition, addition=''):
+        """ 执行读操作，返回结果集ResultSet """
+        assert isinstance(condition, And)
+        where, params = condition.build()
+        if where:
+            sql += " WHERE " + where
+        if addition:
+            sql += " " + addition.strip()
+        kwargs = {'type': 'read'}
+        return self.execute(sql, *params, **kwargs)
+
     def fetch(self, rs, model=dict):
+        """ 分解结果，返回一个迭代器 """
         if isinstance(rs, umysql.ResultSet):
             fs = [f[0] for f in rs.fields]
             for r in rs.rows:
@@ -120,35 +149,17 @@ class Database(object):
         for row in self.fetch(rs, model=model):
             return row
 
-    def execute_read(self, sql, condition, addition=''):
-        assert isinstance(condition, And)
-        where, params = condition.build()
-        if where:
-            sql += " WHERE " + where
-        if addition:
-            sql += " " + addition.strip()
-        kwargs = {'type': 'read'}
-        return self.execute(sql, *params, **kwargs)
-
-    def execute_write(self, sql, condition, *values):
-        assert isinstance(condition, And)
-        where, params = condition.build()
-        if where:
-            sql += " WHERE " + where
-        if len(values) > 0:
-            params = list(values) + params
-        kwargs = {'type': 'write'}
-        return self.execute(sql, *params, **kwargs)
-
     def get_dbname(self):
+        """ 获取当前数据库名称 """
         sql = "SELECT DATABASE()"
         rs = self.execute(sql, type='read')
         if rs.rows and rs.rows[0]:
             return rs.rows[0][0]
 
-    def get_exist_tables(self, name='', is_wild=False):
+    def list_tables(self, tablename='', is_wild=False):
+        """ 列出当前库符合条件的表 """
         sql = "SHOW TABLES LIKE %s"
         if is_wild:
-            name += '%'
-        rs = self.execute(sql, name, type='read')
+            tablename += '%'
+        rs = self.execute(sql, tablename, type='read')
         return [row[0] for row in rs.rows]

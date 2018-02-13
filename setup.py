@@ -10,7 +10,7 @@ setup(
     version=__version__,
     description="a simple db layer based on ultra-mysql",
     author="Ryan Liu",
-    author_email="azhai (at) 126 (dot) com",
+    author_email="azhai@126.com",
     url="https://github.com/azhai/rdmysql",
     license="MIT",
     classifiers=[
