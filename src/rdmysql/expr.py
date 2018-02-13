@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+
 class Expr(object):
     """ 表达式 """
     _field = ''
@@ -41,7 +42,7 @@ class Expr(object):
         if other.field == self.field:
             self.conds.extend(other.conds)
         return self
-        
+
     def first_param(self):
         if self.conds:
             values = self.conds[0][1]
@@ -126,6 +127,7 @@ class Expr(object):
 
 class And(object):
     """ 与 """
+
     def __init__(self, *args, **kwargs):
         self.expressions = []
         for expr in args:
@@ -162,6 +164,7 @@ class And(object):
 
 class Or(And):
     """ 或 """
+
     def build(self):
         wheres, params = self.flatten()
         or_where = ' OR '.join(wheres)

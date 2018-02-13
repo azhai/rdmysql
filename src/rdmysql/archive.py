@@ -26,7 +26,7 @@ class Archive(Table):
             number = self.number
         return self.suffix_mask % number
 
-    def get_tablename(self, quote = False):
+    def get_tablename(self, quote=False):
         if not self.curr_has_suffix and self.is_current():
             tablename = self.__tablename__
         else:
@@ -36,14 +36,14 @@ class Archive(Table):
         else:
             return tablename
 
-    def quick_migrate(self, curr_name, prev_name, auto_incr = 0):
+    def quick_migrate(self, curr_name, prev_name, auto_incr=0):
         rsql = "RENAME TABLE %s TO %" % (curr_name, prev_name)
-        self.db.execute(rsql, type = 'write')
+        self.db.execute(rsql, type='write')
         csql = "CREATE TABLE IF NOT EXISTS %s LIKE %s" % (curr_name, prev_name)
-        self.db.execute(csql, type = 'write')
+        self.db.execute(csql, type='write')
         if auto_incr:
             asql = "ALTER TABLE %s AUTO_INCREMENT = %%d" % curr_name
-            self.db.execute(asql, auto_incr, type = 'write')
+            self.db.execute(asql, auto_incr, type='write')
         return auto_incr  # 自增ID
 
     def partial_migrate(self, curr_name, prev_name, **where):

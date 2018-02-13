@@ -83,9 +83,9 @@ class Monthly(Daily):
     def forward(self, qty=1):
         offset = self.calender.month + qty - 1
         ymd = dict(
-            year = self.calender.year + offset / 12, #负数除法向下取整
-            month = offset % 12 + 1, #负数求余结果也是正数或零
-            day = 1,
+            year=self.calender.year + offset / 12,  #负数除法向下取整
+            month=offset % 12 + 1,  #负数求余结果也是正数或零
+            day=1,
         )
         self.calender = date(**ymd)
         return self

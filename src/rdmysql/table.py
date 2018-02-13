@@ -14,7 +14,7 @@ class Table(object):
         if tablename:
             self.__tablename__ = tablename
         self.reset()
-        
+
     def quote_str(self, name):
         return '`%s`' % name
 
@@ -30,24 +30,42 @@ class Table(object):
             self._db = db
         return self
 
-    def get_tablename(self, quote = False):
+    def get_tablename(self, quote=False):
         if quote:
             return self.quote_str(self.__tablename__)
         else:
             return self.__tablename__
 
-    def get_tableinfo(self, columns='*'):
+    def get_tableinfo(self, columns=['TABLE_ROWS', 'TABLE_COMMENT']):
         if isinstance(columns, (list, tuple, set)):
             columns = ",".join(columns)
         dbname = self.db.get_dbname()
-        tablename = self.get_tablename(quote = False)
+        tablename = self.get_tablename(quote=False)
         sql = "SELECT %s FROM `information_schema`.`TABLES`" % columns
-        condition = And(TABLE_SCHEMA = dbname, TABLE_NAME = tablename)
+        condition = And(TABLE_SCHEMA=dbname, TABLE_NAME=tablename)
         rs = self.db.execute_read(sql, condition)
-        return rs.rows[0] if rs.rows else {}
-        
+        if rs.rows:
+            return self.db.fetch_first(rs)
+        else:
+            return {}
+
+    def get_fields(self, columns=['COLUMN_NAME', 'IS_NULLABLE',
+                'DATA_TYPE', 'COLUMN_TYPE', 'COLUMN_COMMENT']):
+        if isinstance(columns, (list, tuple, set)):
+            columns = ",".join(columns)
+        dbname = self.db.get_dbname()
+        tablename = self.get_tablename(quote=False)
+        sql = "SELECT %s FROM `information_schema`.`COLUMNS`" % columns
+        condition = And(TABLE_SCHEMA=dbname, TABLE_NAME=tablename)
+        addition = "ORDER BY ORDINAL_POSITION"
+        rs = self.db.execute_read(sql, condition, addition)
+        if rs.rows:
+            return [f for f in self.db.fetch(rs)]
+        else:
+            return []
+
     def is_exists(self):
-        tablename = self.get_tablename(quote = False)
+        tablename = self.get_tablename(quote=False)
         tables = self.db.get_exist_tables(tablename, False)
         return len(tables) > 0
 
@@ -109,9 +127,8 @@ class Table(object):
         row = rows.pop(0)
         keys, params, fields = self.unzip_pairs(row)
         holders = ",".join(["%s"] * len(params))
-        tablename = self.get_tablename(quote = True)
-        sql = "%s %s %s VALUES (%s)" % (action,
-                tablename, fields, holders)
+        tablename = self.get_tablename(quote=True)
+        sql = "%s %s %s VALUES (%s)" % (action, tablename, fields, holders)
         if len(rows) > 0:  # 插入更多行
             sql += (", (%s)" % holders) * len(rows)
             for row in rows:
@@ -121,7 +138,7 @@ class Table(object):
         return rs[1] if rs else 0  # 最后的自增ID
 
     def delete(self, **where):
-        tablename = self.get_tablename(quote = True)
+        tablename = self.get_tablename(quote=True)
         sql = "DELETE FROM %s" % tablename
         condition = self.condition
         if len(where) > 0:
@@ -141,7 +158,7 @@ class Table(object):
                 holders.append("`%s`=%%s" % key)
                 values.append(value)
         fields = ",".join(holders)
-        tablename = self.get_tablename(quote = True)
+        tablename = self.get_tablename(quote=True)
         sql = "UPDATE %s SET %s" % (tablename, fields)
         condition = self.condition
         if len(where) > 0:
@@ -187,7 +204,7 @@ class Table(object):
                 step = limit
         if isinstance(columns, (list, tuple, set)):
             columns = ",".join(columns)
-        tablename = self.get_tablename(quote = True)
+        tablename = self.get_tablename(quote=True)
         sql = "SELECT %s FROM %s" % (columns, tablename)
         group_order = self.build_group_order()
         while limit <= 0 or offset < total:

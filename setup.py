@@ -24,7 +24,7 @@ setup(
     packages=find_packages('src'),
     package_dir={'': 'src'},
     install_requires=[
-        "umysql>2.61",
+        "umysql>=2.61",
     ],
     dependency_links=[
         "git+ssh://git@github.com/azhai/ultramysql.git@2.62.dev0#egg=mayo-2.62.dev0",

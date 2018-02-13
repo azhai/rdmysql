@@ -93,8 +93,8 @@ class Database(object):
             is_write = True
         else:
             is_write = False
-        self.add_sql(sql, *params, is_write = is_write)
-        if is_write and self.readonly: #只读，不执行
+        self.add_sql(sql, *params, is_write=is_write)
+        if is_write and self.readonly:  #只读，不执行
             return
         try:
             return self.reconnect().query(sql, params)
@@ -106,8 +106,7 @@ class Database(object):
             else:
                 raise err
 
-    @staticmethod
-    def fetch(rs, model=dict):
+    def fetch(self, rs, model=dict):
         if isinstance(rs, umysql.ResultSet):
             fs = [f[0] for f in rs.fields]
             for r in rs.rows:
@@ -116,6 +115,10 @@ class Database(object):
                     yield row
                 else:
                     yield model(row)
+
+    def fetch_first(self, rs, model=dict):
+        for row in self.fetch(rs, model=model):
+            return row
 
     def execute_read(self, sql, condition, addition=''):
         assert isinstance(condition, And)
@@ -140,12 +143,12 @@ class Database(object):
     def get_dbname(self):
         sql = "SELECT DATABASE()"
         rs = self.execute(sql, type='read')
-        if rs.rows:
-            return rs.rows[0]['DATABASE()']
+        if rs.rows and rs.rows[0]:
+            return rs.rows[0][0]
 
-    def get_exist_tables(self, name = '', is_wild=False):
+    def get_exist_tables(self, name='', is_wild=False):
         sql = "SHOW TABLES LIKE %s"
         if is_wild:
             name += '%'
-        rs = self.execute(sql, name, type = 'read')
+        rs = self.execute(sql, name, type='read')
         return [row[0] for row in rs.rows]
